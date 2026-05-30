@@ -5,7 +5,9 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.view.inputmethod.EditorInfo
 import android.widget.Button
+import android.widget.EditText
 import android.widget.TextView
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -21,6 +23,8 @@ import kotlinx.coroutines.launch
 class MainActivity : AppCompatActivity() {
     private lateinit var startButton: Button
     private lateinit var logConsole: TextView
+    private lateinit var editMessage: EditText
+    private lateinit var sendButton: Button
     private var startRequested = false
 
     private val permissionLauncher = registerForActivityResult(
@@ -50,6 +54,16 @@ class MainActivity : AppCompatActivity() {
 
         startButton = findViewById(R.id.button_start_trekmesh)
         logConsole = findViewById(R.id.text_log_console)
+        editMessage = findViewById(R.id.edit_message)
+        sendButton = findViewById(R.id.button_send)
+
+        sendButton.setOnClickListener { sendMessage() }
+        editMessage.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_SEND) {
+                sendMessage()
+                true
+            } else false
+        }
 
         startButton.setOnClickListener {
             startRequested = true
@@ -65,16 +79,24 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
-                    TrekMeshBus.logs.collect { message ->
-                        appendLog(message)
+                    TrekMeshBus.logs.collect { lines ->
+                        logConsole.text = lines.joinToString("\n")
                     }
                 }
             }
         }
     }
 
+    private fun sendMessage() {
+        val text = editMessage.text.toString().trim()
+        if (text.isNotEmpty()) {
+            TrekMeshBus.sendMessage(text)
+            editMessage.text.clear()
+        }
+    }
+
     private fun appendLog(message: String) {
-        logConsole.append("$message\n")
+        TrekMeshBus.emitLog(message)
     }
 
     private fun hasAllNearbyPermissions(): Boolean {

@@ -23,6 +23,11 @@ import com.google.android.gms.nearby.connection.PayloadCallback
 import com.google.android.gms.nearby.connection.PayloadTransferUpdate
 import com.google.android.gms.nearby.connection.Strategy
 import kotlin.random.Random
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 class TrekMeshService : Service() {
 
@@ -35,49 +40,66 @@ class TrekMeshService : Service() {
     private lateinit var connectionsClient: ConnectionsClient
     private lateinit var serviceId: String
     private lateinit var localEndpointName: String
+    private val connectedEndpoints = mutableSetOf<String>()
+    private val seenMessageIds = mutableSetOf<String>()
+    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private val connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
         override fun onConnectionInitiated(endpointId: String, connectionInfo: ConnectionInfo) {
             Log.i(LOG_TAG, "Connessione iniziata da ${connectionInfo.endpointName}")
+            TrekMeshBus.emitLog("Connessione in entrata da ${connectionInfo.endpointName}, accetto...")
             connectionsClient.acceptConnection(endpointId, payloadCallback)
         }
 
         override fun onConnectionResult(endpointId: String, resolution: ConnectionResolution) {
             if (resolution.status.statusCode == ConnectionsStatusCodes.STATUS_OK) {
-                val message = "Ping ricevuto da $localEndpointName"
-                connectionsClient.sendPayload(endpointId, Payload.fromBytes(message.toByteArray()))
-                Log.i(LOG_TAG, "Connessione OK con $endpointId, inviato ping")
+                connectedEndpoints.add(endpointId)
+                TrekMeshBus.emitLog("Connesso a $endpointId")
+                Log.i(LOG_TAG, "Connessione OK con $endpointId")
             } else {
                 Log.w(LOG_TAG, "Connessione fallita con $endpointId: ${resolution.status.statusCode}")
+                TrekMeshBus.emitLog("Connessione fallita con $endpointId (codice: ${resolution.status.statusCode})")
             }
         }
 
         override fun onDisconnected(endpointId: String) {
+            connectedEndpoints.remove(endpointId)
             Log.i(LOG_TAG, "Disconnesso da $endpointId")
+            TrekMeshBus.emitLog("Disconnesso da $endpointId")
         }
     }
 
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
         override fun onEndpointFound(endpointId: String, info: com.google.android.gms.nearby.connection.DiscoveredEndpointInfo) {
             Log.i(LOG_TAG, "Endpoint trovato: ${info.endpointName} ($endpointId)")
+            TrekMeshBus.emitLog("Dispositivo trovato: ${info.endpointName}, richiedo connessione...")
             connectionsClient.requestConnection(localEndpointName, endpointId, connectionLifecycleCallback)
         }
 
         override fun onEndpointLost(endpointId: String) {
             Log.i(LOG_TAG, "Endpoint perso: $endpointId")
+            TrekMeshBus.emitLog("Dispositivo perso: $endpointId")
         }
     }
 
     private val payloadCallback = object : PayloadCallback() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
             if (payload.type == Payload.Type.BYTES) {
-                val data = payload.asBytes() ?: ByteArray(0)
-                val text = String(data, Charsets.UTF_8)
-                Log.i(LOG_TAG, "Payload da $endpointId: $text")
-                TrekMeshBus.emitLog("Da $endpointId: $text")
+                val raw = String(payload.asBytes() ?: ByteArray(0), Charsets.UTF_8)
+                val parts = raw.split("|", limit = 3)
+                if (parts.size < 3) {
+                    Log.w(LOG_TAG, "Payload malformato da $endpointId: $raw")
+                    return
+                }
+                val (msgId, sender, text) = parts
+                if (!seenMessageIds.add(msgId)) {
+                    Log.d(LOG_TAG, "Messaggio duplicato ignorato: $msgId")
+                    return
+                }
+                Log.i(LOG_TAG, "Messaggio da $sender: $text")
+                TrekMeshBus.emitLog("$sender: $text")
             } else {
                 Log.i(LOG_TAG, "Payload non BYTES da $endpointId")
-                TrekMeshBus.emitLog("Payload non BYTES da $endpointId")
             }
         }
 
@@ -111,7 +133,30 @@ class TrekMeshService : Service() {
         }
 
         startNetworking()
+        listenForOutgoingMessages()
         return START_STICKY
+    }
+
+    private fun listenForOutgoingMessages() {
+        serviceScope.launch {
+            TrekMeshBus.outgoing.collect { raw ->
+                if (connectedEndpoints.isEmpty()) {
+                    TrekMeshBus.emitLog("Nessun dispositivo connesso")
+                    return@collect
+                }
+                // raw = "<id>|<testo>", aggiungiamo il mittente: "<id>|<sender>|<testo>"
+                val parts = raw.split("|", limit = 2)
+                val msgId = parts[0]
+                val text = parts.getOrElse(1) { "" }
+                val fullPayload = "$msgId|$localEndpointName|$text"
+                seenMessageIds.add(msgId)
+                val payload = Payload.fromBytes(fullPayload.toByteArray())
+                connectedEndpoints.forEach { endpointId ->
+                    connectionsClient.sendPayload(endpointId, payload)
+                }
+                TrekMeshBus.emitLog("Tu: $text")
+            }
+        }
     }
 
     private fun startNetworking() {
@@ -125,13 +170,25 @@ class TrekMeshService : Service() {
 
         connectionsClient
             .startAdvertising(localEndpointName, serviceId, connectionLifecycleCallback, advertisingOptions)
-            .addOnSuccessListener { Log.i(LOG_TAG, "Advertising avviato") }
-            .addOnFailureListener { e -> Log.e(LOG_TAG, "Advertising fallito", e) }
+            .addOnSuccessListener {
+                Log.i(LOG_TAG, "Advertising avviato")
+                TrekMeshBus.emitLog("[$localEndpointName] In ascolto di altri dispositivi...")
+            }
+            .addOnFailureListener { e ->
+                Log.e(LOG_TAG, "Advertising fallito", e)
+                TrekMeshBus.emitLog("Errore advertising: ${e.message}")
+            }
 
         connectionsClient
             .startDiscovery(serviceId, endpointDiscoveryCallback, discoveryOptions)
-            .addOnSuccessListener { Log.i(LOG_TAG, "Discovery avviato") }
-            .addOnFailureListener { e -> Log.e(LOG_TAG, "Discovery fallito", e) }
+            .addOnSuccessListener {
+                Log.i(LOG_TAG, "Discovery avviato")
+                TrekMeshBus.emitLog("Scansione dispositivi vicini avviata...")
+            }
+            .addOnFailureListener { e ->
+                Log.e(LOG_TAG, "Discovery fallito", e)
+                TrekMeshBus.emitLog("Errore discovery: ${e.message}")
+            }
     }
 
     private fun generateEndpointName(): String {
@@ -168,6 +225,7 @@ class TrekMeshService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        serviceScope.cancel()
         connectionsClient.stopAdvertising()
         connectionsClient.stopDiscovery()
         connectionsClient.stopAllEndpoints()
