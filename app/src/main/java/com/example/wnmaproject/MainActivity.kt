@@ -8,6 +8,7 @@ import android.util.Log
 import android.view.inputmethod.EditorInfo
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ScrollView
 import android.widget.TextView
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -22,7 +23,10 @@ import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
     private lateinit var startButton: Button
+    private lateinit var chatView: TextView
+    private lateinit var scrollChat: ScrollView
     private lateinit var logConsole: TextView
+    private lateinit var scrollLog: ScrollView
     private lateinit var editMessage: EditText
     private lateinit var sendButton: Button
     private var startRequested = false
@@ -53,7 +57,10 @@ class MainActivity : AppCompatActivity() {
         }
 
         startButton = findViewById(R.id.button_start_trekmesh)
+        chatView = findViewById(R.id.text_chat)
+        scrollChat = findViewById(R.id.scroll_chat)
         logConsole = findViewById(R.id.text_log_console)
+        scrollLog = findViewById(R.id.scroll_log)
         editMessage = findViewById(R.id.edit_message)
         sendButton = findViewById(R.id.button_send)
 
@@ -81,6 +88,13 @@ class MainActivity : AppCompatActivity() {
                 launch {
                     TrekMeshBus.logs.collect { lines ->
                         logConsole.text = lines.joinToString("\n")
+                        scrollLog.post { scrollLog.fullScroll(android.view.View.FOCUS_DOWN) }
+                    }
+                }
+                launch {
+                    TrekMeshBus.messages.collect { lines ->
+                        chatView.text = lines.joinToString("\n")
+                        scrollChat.post { scrollChat.fullScroll(android.view.View.FOCUS_DOWN) }
                     }
                 }
             }

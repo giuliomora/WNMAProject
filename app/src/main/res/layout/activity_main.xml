@@ -12,19 +12,41 @@
         android:layout_height="wrap_content"
         android:text="Avvia TrekMesh" />
 
+    <!-- Chat messages -->
     <ScrollView
+        android:id="@+id/scroll_chat"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="2"
+        android:fillViewport="true"
+        android:paddingTop="12dp">
+
+        <TextView
+            android:id="@+id/text_chat"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textIsSelectable="true" />
+    </ScrollView>
+
+    <!-- System log -->
+    <ScrollView
+        android:id="@+id/scroll_log"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
         android:fillViewport="true"
-        android:paddingTop="12dp">
+        android:paddingTop="4dp"
+        android:background="#11000000">
 
         <TextView
             android:id="@+id/text_log_console"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Console TrekMesh\n"
-            android:textIsSelectable="true" />
+            android:textSize="11sp"
+            android:textColor="#AAFFFFFF"
+            android:textIsSelectable="true"
+            android:padding="4dp" />
     </ScrollView>
 
     <LinearLayout

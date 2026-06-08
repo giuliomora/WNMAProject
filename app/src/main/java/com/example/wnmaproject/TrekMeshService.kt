@@ -9,6 +9,8 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.example.trekmesh.db.MessageEntity
+import com.example.trekmesh.db.TrekMeshDatabase
 import com.google.android.gms.nearby.Nearby
 import com.google.android.gms.nearby.connection.AdvertisingOptions
 import com.google.android.gms.nearby.connection.ConnectionInfo
@@ -35,28 +37,61 @@ class TrekMeshService : Service() {
         private const val NOTIFICATION_CHANNEL_ID = "trekmesh_p2p_channel"
         private const val NOTIFICATION_ID = 1
         private const val LOG_TAG = "TrekMeshService"
+        private const val INITIAL_TTL = 7
+        private const val MAX_BUFFER_SIZE = 200
+    }
+
+    private data class MeshMessage(
+        val id: String,
+        val sender: String,
+        val ttl: Int,
+        val text: String
+    ) {
+        fun toWireFormat() = "$id|$sender|$ttl|$text"
+        fun toEntity() = MessageEntity(id, sender, ttl, text)
     }
 
     private lateinit var connectionsClient: ConnectionsClient
     private lateinit var serviceId: String
     private lateinit var localEndpointName: String
+    private lateinit var db: TrekMeshDatabase
+
     private val connectedEndpoints = mutableSetOf<String>()
+    private val pendingEndpoints = mutableSetOf<String>()
+    // endpointId -> endpointName, per deduplicare lo stesso dispositivo su BT e WiFi
+    private val endpointNames = mutableMapOf<String, String>()
+    // Popolato all'avvio dal DB; aggiornato in memoria durante la sessione
     private val seenMessageIds = mutableSetOf<String>()
+
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private val connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
         override fun onConnectionInitiated(endpointId: String, connectionInfo: ConnectionInfo) {
             Log.i(LOG_TAG, "Connessione iniziata da ${connectionInfo.endpointName}")
             TrekMeshBus.emitLog("Connessione in entrata da ${connectionInfo.endpointName}, accetto...")
+            pendingEndpoints.add(endpointId)
+            endpointNames[endpointId] = connectionInfo.endpointName
             connectionsClient.acceptConnection(endpointId, payloadCallback)
         }
 
         override fun onConnectionResult(endpointId: String, resolution: ConnectionResolution) {
+            pendingEndpoints.remove(endpointId)
             if (resolution.status.statusCode == ConnectionsStatusCodes.STATUS_OK) {
+                val name = endpointNames[endpointId] ?: endpointId
+                // Scarta connessioni duplicate verso lo stesso dispositivo (es. BT + WiFi simultanei)
+                val duplicate = connectedEndpoints.firstOrNull { endpointNames[it] == name }
+                if (duplicate != null) {
+                    Log.d(LOG_TAG, "Connessione duplicata con $name, scarto $endpointId")
+                    connectionsClient.disconnectFromEndpoint(endpointId)
+                    endpointNames.remove(endpointId)
+                    return
+                }
                 connectedEndpoints.add(endpointId)
-                TrekMeshBus.emitLog("Connesso a $endpointId")
-                Log.i(LOG_TAG, "Connessione OK con $endpointId")
+                TrekMeshBus.emitLog("Connesso a $name")
+                Log.i(LOG_TAG, "Connessione OK con $name ($endpointId)")
+                serviceScope.launch { flushBufferTo(endpointId) }
             } else {
+                endpointNames.remove(endpointId)
                 Log.w(LOG_TAG, "Connessione fallita con $endpointId: ${resolution.status.statusCode}")
                 TrekMeshBus.emitLog("Connessione fallita con $endpointId (codice: ${resolution.status.statusCode})")
             }
@@ -64,48 +99,69 @@ class TrekMeshService : Service() {
 
         override fun onDisconnected(endpointId: String) {
             connectedEndpoints.remove(endpointId)
-            Log.i(LOG_TAG, "Disconnesso da $endpointId")
-            TrekMeshBus.emitLog("Disconnesso da $endpointId")
+            pendingEndpoints.remove(endpointId)
+            endpointNames.remove(endpointId)
+            val name = endpointNames[endpointId] ?: endpointId
+            Log.i(LOG_TAG, "Disconnesso da $name ($endpointId)")
+            TrekMeshBus.emitLog("Disconnesso da $name")
         }
     }
 
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
-        override fun onEndpointFound(endpointId: String, info: com.google.android.gms.nearby.connection.DiscoveredEndpointInfo) {
+        override fun onEndpointFound(
+            endpointId: String,
+            info: com.google.android.gms.nearby.connection.DiscoveredEndpointInfo
+        ) {
+            if (endpointId in connectedEndpoints || endpointId in pendingEndpoints) {
+                Log.d(LOG_TAG, "Endpoint $endpointId già gestito, ignoro")
+                return
+            }
+            if (endpointNames.values.contains(info.endpointName)) {
+                Log.d(LOG_TAG, "Dispositivo ${info.endpointName} già connesso via altro canale, ignoro")
+                return
+            }
             Log.i(LOG_TAG, "Endpoint trovato: ${info.endpointName} ($endpointId)")
             TrekMeshBus.emitLog("Dispositivo trovato: ${info.endpointName}, richiedo connessione...")
+            pendingEndpoints.add(endpointId)
+            endpointNames[endpointId] = info.endpointName
             connectionsClient.requestConnection(localEndpointName, endpointId, connectionLifecycleCallback)
         }
 
         override fun onEndpointLost(endpointId: String) {
-            Log.i(LOG_TAG, "Endpoint perso: $endpointId")
-            TrekMeshBus.emitLog("Dispositivo perso: $endpointId")
+            val name = endpointNames[endpointId] ?: endpointId
+            Log.i(LOG_TAG, "Endpoint perso: $name ($endpointId)")
+            TrekMeshBus.emitLog("Dispositivo perso: $name")
         }
     }
 
     private val payloadCallback = object : PayloadCallback() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
-            if (payload.type == Payload.Type.BYTES) {
-                val raw = String(payload.asBytes() ?: ByteArray(0), Charsets.UTF_8)
-                val parts = raw.split("|", limit = 3)
-                if (parts.size < 3) {
-                    Log.w(LOG_TAG, "Payload malformato da $endpointId: $raw")
-                    return
-                }
-                val (msgId, sender, text) = parts
-                if (!seenMessageIds.add(msgId)) {
-                    Log.d(LOG_TAG, "Messaggio duplicato ignorato: $msgId")
-                    return
-                }
-                Log.i(LOG_TAG, "Messaggio da $sender: $text")
-                TrekMeshBus.emitLog("$sender: $text")
-            } else {
-                Log.i(LOG_TAG, "Payload non BYTES da $endpointId")
+            if (payload.type != Payload.Type.BYTES) return
+            val raw = String(payload.asBytes() ?: ByteArray(0), Charsets.UTF_8)
+            val parts = raw.split("|", limit = 4)
+            if (parts.size < 4) {
+                Log.w(LOG_TAG, "Payload malformato da $endpointId: $raw")
+                return
+            }
+            val (msgId, sender, ttlStr, text) = parts
+            val ttl = ttlStr.toIntOrNull() ?: 0
+
+            if (!seenMessageIds.add(msgId)) {
+                Log.d(LOG_TAG, "Messaggio duplicato ignorato: $msgId")
+                return
+            }
+
+            Log.i(LOG_TAG, "Messaggio da $sender (TTL=$ttl): $text")
+            TrekMeshBus.emitMessage(sender, text, isOwn = false)
+
+            if (ttl > 1) {
+                val forward = MeshMessage(msgId, sender, ttl - 1, text)
+                serviceScope.launch { persistMessage(forward) }
+                forwardToAllExcept(forward, excludeEndpointId = endpointId)
             }
         }
 
-        override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
-            // Nessuna gestione extra al momento
-        }
+        override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {}
     }
 
     override fun onCreate() {
@@ -113,60 +169,90 @@ class TrekMeshService : Service() {
         connectionsClient = Nearby.getConnectionsClient(this)
         serviceId = packageName
         localEndpointName = generateEndpointName()
+        db = TrekMeshDatabase.getInstance(this)
+        serviceScope.launch {
+            seenMessageIds += db.messageDao().getAllIds()
+        }
+        listenForOutgoingMessages()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         createNotificationChannel()
         val notification = createNotification()
 
-        // Inizia il servizio in foreground con il tipo appropriato per Android 14+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            // Android 14+: specifica il tipo di servizio foreground
             startForeground(
                 NOTIFICATION_ID,
                 notification,
                 android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
             )
         } else {
-            // Android 12-13
             startForeground(NOTIFICATION_ID, notification)
         }
 
         startNetworking()
-        listenForOutgoingMessages()
         return START_STICKY
     }
 
     private fun listenForOutgoingMessages() {
         serviceScope.launch {
             TrekMeshBus.outgoing.collect { raw ->
-                if (connectedEndpoints.isEmpty()) {
-                    TrekMeshBus.emitLog("Nessun dispositivo connesso")
-                    return@collect
-                }
-                // raw = "<id>|<testo>", aggiungiamo il mittente: "<id>|<sender>|<testo>"
                 val parts = raw.split("|", limit = 2)
                 val msgId = parts[0]
                 val text = parts.getOrElse(1) { "" }
-                val fullPayload = "$msgId|$localEndpointName|$text"
+                val msg = MeshMessage(msgId, localEndpointName, INITIAL_TTL, text)
+
                 seenMessageIds.add(msgId)
-                val payload = Payload.fromBytes(fullPayload.toByteArray())
-                connectedEndpoints.forEach { endpointId ->
-                    connectionsClient.sendPayload(endpointId, payload)
+                persistMessage(msg)
+                TrekMeshBus.emitMessage(localEndpointName, text, isOwn = true)
+
+                if (connectedEndpoints.isEmpty()) {
+                    TrekMeshBus.emitLog("Nessun dispositivo connesso — messaggio bufferizzato")
+                    return@collect
                 }
-                TrekMeshBus.emitLog("Tu: $text")
+                sendToAll(msg)
             }
         }
     }
 
-    private fun startNetworking() {
-        val advertisingOptions = AdvertisingOptions.Builder()
-            .setStrategy(Strategy.P2P_CLUSTER)
-            .build()
+    private fun sendToAll(msg: MeshMessage) {
+        val payload = Payload.fromBytes(msg.toWireFormat().toByteArray())
+        connectedEndpoints.forEach { connectionsClient.sendPayload(it, payload) }
+    }
 
-        val discoveryOptions = DiscoveryOptions.Builder()
-            .setStrategy(Strategy.P2P_CLUSTER)
-            .build()
+    private fun forwardToAllExcept(msg: MeshMessage, excludeEndpointId: String) {
+        val targets = connectedEndpoints - excludeEndpointId
+        if (targets.isEmpty()) return
+        val payload = Payload.fromBytes(msg.toWireFormat().toByteArray())
+        targets.forEach { connectionsClient.sendPayload(it, payload) }
+        Log.d(LOG_TAG, "Forwarded ${msg.id} a ${targets.size} peer(s) (TTL=${msg.ttl})")
+    }
+
+    // Store-and-forward: invia l'intero buffer persistito al peer appena connesso
+    private suspend fun flushBufferTo(endpointId: String) {
+        val buffered = db.messageDao().getAll()
+        if (buffered.isEmpty()) return
+        val name = endpointNames[endpointId] ?: endpointId
+        Log.i(LOG_TAG, "Flush di ${buffered.size} messaggi verso $name ($endpointId)")
+        TrekMeshBus.emitLog("Invio ${buffered.size} messaggi bufferizzati a $name...")
+        buffered.forEach { entity ->
+            if (entity.ttl > 0) {
+                val wire = "${entity.id}|${entity.sender}|${entity.ttl}|${entity.text}"
+                val payload = Payload.fromBytes(wire.toByteArray())
+                connectionsClient.sendPayload(endpointId, payload)
+            }
+        }
+        db.messageDao().deleteExpired()
+    }
+
+    private suspend fun persistMessage(msg: MeshMessage) {
+        db.messageDao().insert(msg.toEntity())
+        db.messageDao().pruneOldest(MAX_BUFFER_SIZE)
+    }
+
+    private fun startNetworking() {
+        val advertisingOptions = AdvertisingOptions.Builder().setStrategy(Strategy.P2P_CLUSTER).build()
+        val discoveryOptions = DiscoveryOptions.Builder().setStrategy(Strategy.P2P_CLUSTER).build()
 
         connectionsClient
             .startAdvertising(localEndpointName, serviceId, connectionLifecycleCallback, advertisingOptions)
@@ -191,37 +277,27 @@ class TrekMeshService : Service() {
             }
     }
 
-    private fun generateEndpointName(): String {
-        val suffix = Random.nextInt(0x10000)
-        return "Hiker-%04X".format(suffix)
-    }
+    private fun generateEndpointName(): String = "Hiker-%04X".format(Random.nextInt(0x10000))
 
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             NOTIFICATION_CHANNEL_ID,
             "TrekMesh Protezione",
             NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = "Notifica di servizio P2P TrekMesh"
-        }
-
-        val notificationManager = getSystemService(NotificationManager::class.java)
-        notificationManager?.createNotificationChannel(channel)
+        ).apply { description = "Notifica di servizio P2P TrekMesh" }
+        getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
     }
 
-    private fun createNotification(): Notification {
-        return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+    private fun createNotification(): Notification =
+        NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setContentTitle("TrekMesh")
             .setContentText("TrekMesh sta proteggendo la tua escursione")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .build()
-    }
 
-    override fun onBind(intent: Intent?): IBinder? {
-        return null
-    }
+    override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
         super.onDestroy()
