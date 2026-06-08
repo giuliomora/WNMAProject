@@ -92,8 +92,15 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
                 launch {
-                    TrekMeshBus.messages.collect { lines ->
-                        chatView.text = lines.joinToString("\n")
+                    TrekMeshBus.messages.collect { messages ->
+                        chatView.text = messages.joinToString("\n") { msg ->
+                            val icon = when (msg.status) {
+                                "PENDING"   -> "⏳"
+                                "DELIVERED" -> "✓"
+                                else        -> ""
+                            }
+                            "[${msg.label}] ${msg.text} $icon".trim()
+                        }
                         scrollChat.post { scrollChat.fullScroll(android.view.View.FOCUS_DOWN) }
                     }
                 }

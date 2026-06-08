@@ -17,10 +17,12 @@ interface MessageDao {
     @Query("SELECT id FROM messages")
     suspend fun getAllIds(): List<String>
 
+    @Query("UPDATE messages SET status = :status WHERE id = :id")
+    suspend fun updateStatus(id: String, status: String)
+
     @Query("DELETE FROM messages WHERE ttl <= 0")
     suspend fun deleteExpired()
 
-    // Mantiene solo le MAX_SIZE entry più recenti
     @Query(
         """DELETE FROM messages WHERE id NOT IN (
             SELECT id FROM messages ORDER BY timestamp DESC LIMIT :maxSize

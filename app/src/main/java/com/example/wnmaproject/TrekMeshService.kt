@@ -24,7 +24,7 @@ import com.google.android.gms.nearby.connection.Payload
 import com.google.android.gms.nearby.connection.PayloadCallback
 import com.google.android.gms.nearby.connection.PayloadTransferUpdate
 import com.google.android.gms.nearby.connection.Strategy
-import kotlin.random.Random
+import java.security.SecureRandom
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -39,6 +39,8 @@ class TrekMeshService : Service() {
         private const val LOG_TAG = "TrekMeshService"
         private const val INITIAL_TTL = 7
         private const val MAX_BUFFER_SIZE = 200
+        private const val TYPE_MSG = "MSG"
+        private const val TYPE_ACK = "ACK"
     }
 
     private data class MeshMessage(
@@ -47,8 +49,12 @@ class TrekMeshService : Service() {
         val ttl: Int,
         val text: String
     ) {
-        fun toWireFormat() = "$id|$sender|$ttl|$text"
-        fun toEntity() = MessageEntity(id, sender, ttl, text)
+        // Wire: MSG|id|sender|ttl|encrypted_text
+        fun toWireFormat(): String {
+            val encrypted = CryptoHelper.encrypt(text)
+            return "$TYPE_MSG|$id|$sender|$ttl|$encrypted"
+        }
+        fun toEntity(status: String = "PENDING") = MessageEntity(id, sender, ttl, text, status)
     }
 
     private lateinit var connectionsClient: ConnectionsClient
@@ -58,10 +64,9 @@ class TrekMeshService : Service() {
 
     private val connectedEndpoints = mutableSetOf<String>()
     private val pendingEndpoints = mutableSetOf<String>()
-    // endpointId -> endpointName, per deduplicare lo stesso dispositivo su BT e WiFi
     private val endpointNames = mutableMapOf<String, String>()
-    // Popolato all'avvio dal DB; aggiornato in memoria durante la sessione
     private val seenMessageIds = mutableSetOf<String>()
+    private val ownMessageIds = mutableSetOf<String>()
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -78,7 +83,6 @@ class TrekMeshService : Service() {
             pendingEndpoints.remove(endpointId)
             if (resolution.status.statusCode == ConnectionsStatusCodes.STATUS_OK) {
                 val name = endpointNames[endpointId] ?: endpointId
-                // Scarta connessioni duplicate verso lo stesso dispositivo (es. BT + WiFi simultanei)
                 val duplicate = connectedEndpoints.firstOrNull { endpointNames[it] == name }
                 if (duplicate != null) {
                     Log.d(LOG_TAG, "Connessione duplicata con $name, scarto $endpointId")
@@ -98,10 +102,10 @@ class TrekMeshService : Service() {
         }
 
         override fun onDisconnected(endpointId: String) {
+            val name = endpointNames[endpointId] ?: endpointId
             connectedEndpoints.remove(endpointId)
             pendingEndpoints.remove(endpointId)
             endpointNames.remove(endpointId)
-            val name = endpointNames[endpointId] ?: endpointId
             Log.i(LOG_TAG, "Disconnesso da $name ($endpointId)")
             TrekMeshBus.emitLog("Disconnesso da $name")
         }
@@ -138,30 +142,68 @@ class TrekMeshService : Service() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
             if (payload.type != Payload.Type.BYTES) return
             val raw = String(payload.asBytes() ?: ByteArray(0), Charsets.UTF_8)
-            val parts = raw.split("|", limit = 4)
-            if (parts.size < 4) {
-                Log.w(LOG_TAG, "Payload malformato da $endpointId: $raw")
-                return
-            }
-            val (msgId, sender, ttlStr, text) = parts
-            val ttl = ttlStr.toIntOrNull() ?: 0
+            val type = raw.substringBefore("|")
 
-            if (!seenMessageIds.add(msgId)) {
-                Log.d(LOG_TAG, "Messaggio duplicato ignorato: $msgId")
-                return
-            }
-
-            Log.i(LOG_TAG, "Messaggio da $sender (TTL=$ttl): $text")
-            TrekMeshBus.emitMessage(sender, text, isOwn = false)
-
-            if (ttl > 1) {
-                val forward = MeshMessage(msgId, sender, ttl - 1, text)
-                serviceScope.launch { persistMessage(forward) }
-                forwardToAllExcept(forward, excludeEndpointId = endpointId)
+            when (type) {
+                TYPE_MSG -> handleIncomingMessage(endpointId, raw)
+                TYPE_ACK -> handleIncomingAck(raw)
+                else -> Log.w(LOG_TAG, "Tipo payload sconosciuto da $endpointId: $type")
             }
         }
 
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {}
+    }
+
+    private fun handleIncomingMessage(endpointId: String, raw: String) {
+        // Wire: MSG|id|sender|ttl|encrypted_text
+        val parts = raw.split("|", limit = 5)
+        if (parts.size < 5) {
+            Log.w(LOG_TAG, "MSG malformato da $endpointId: $raw")
+            return
+        }
+        val (_, msgId, sender, ttlStr, encryptedText) = parts
+        val ttl = ttlStr.toIntOrNull() ?: 0
+        val text = CryptoHelper.decrypt(encryptedText) ?: run {
+            Log.w(LOG_TAG, "Decifratura fallita per messaggio $msgId da $endpointId")
+            return
+        }
+
+        if (!seenMessageIds.add(msgId)) {
+            Log.d(LOG_TAG, "Messaggio duplicato ignorato: $msgId")
+            return
+        }
+
+        Log.i(LOG_TAG, "Messaggio da $sender (TTL=$ttl): $text")
+        TrekMeshBus.emitMessage(msgId, sender, text, isOwn = false)
+        serviceScope.launch { db.messageDao().insert(MessageEntity(msgId, sender, ttl, text, "RECEIVED")) }
+
+        sendAck(endpointId, msgId)
+
+        if (ttl > 1) {
+            val forward = MeshMessage(msgId, sender, ttl - 1, text)
+            serviceScope.launch { persistMessage(forward, "RECEIVED") }
+            forwardToAllExcept(forward, excludeEndpointId = endpointId)
+        }
+    }
+
+    private fun handleIncomingAck(raw: String) {
+        // Wire: ACK|originalMsgId|ackerName
+        val parts = raw.split("|", limit = 3)
+        if (parts.size < 3) return
+        val (_, originalMsgId, ackerName) = parts
+        Log.i(LOG_TAG, "ACK ricevuto per $originalMsgId da $ackerName")
+        serviceScope.launch { db.messageDao().updateStatus(originalMsgId, "DELIVERED") }
+        val alreadyDelivered = !ownMessageIds.remove(originalMsgId)
+        TrekMeshBus.updateMessageStatus(originalMsgId, "DELIVERED")
+        if (!alreadyDelivered) {
+            TrekMeshBus.emitLog("Messaggio consegnato a $ackerName")
+        }
+    }
+
+    private fun sendAck(endpointId: String, originalMsgId: String) {
+        val ack = "$TYPE_ACK|$originalMsgId|$localEndpointName"
+        val payload = Payload.fromBytes(ack.toByteArray(Charsets.UTF_8))
+        connectionsClient.sendPayload(endpointId, payload)
     }
 
     override fun onCreate() {
@@ -203,8 +245,9 @@ class TrekMeshService : Service() {
                 val msg = MeshMessage(msgId, localEndpointName, INITIAL_TTL, text)
 
                 seenMessageIds.add(msgId)
-                persistMessage(msg)
-                TrekMeshBus.emitMessage(localEndpointName, text, isOwn = true)
+                ownMessageIds.add(msgId)
+                persistMessage(msg, "PENDING")
+                TrekMeshBus.emitMessage(msgId, localEndpointName, text, isOwn = true)
 
                 if (connectedEndpoints.isEmpty()) {
                     TrekMeshBus.emitLog("Nessun dispositivo connesso — messaggio bufferizzato")
@@ -216,37 +259,35 @@ class TrekMeshService : Service() {
     }
 
     private fun sendToAll(msg: MeshMessage) {
-        val payload = Payload.fromBytes(msg.toWireFormat().toByteArray())
+        val payload = Payload.fromBytes(msg.toWireFormat().toByteArray(Charsets.UTF_8))
         connectedEndpoints.forEach { connectionsClient.sendPayload(it, payload) }
     }
 
     private fun forwardToAllExcept(msg: MeshMessage, excludeEndpointId: String) {
         val targets = connectedEndpoints - excludeEndpointId
         if (targets.isEmpty()) return
-        val payload = Payload.fromBytes(msg.toWireFormat().toByteArray())
+        val payload = Payload.fromBytes(msg.toWireFormat().toByteArray(Charsets.UTF_8))
         targets.forEach { connectionsClient.sendPayload(it, payload) }
         Log.d(LOG_TAG, "Forwarded ${msg.id} a ${targets.size} peer(s) (TTL=${msg.ttl})")
     }
 
-    // Store-and-forward: invia l'intero buffer persistito al peer appena connesso
     private suspend fun flushBufferTo(endpointId: String) {
         val buffered = db.messageDao().getAll()
         if (buffered.isEmpty()) return
-        val name = endpointNames[endpointId] ?: endpointId
-        Log.i(LOG_TAG, "Flush di ${buffered.size} messaggi verso $name ($endpointId)")
-        TrekMeshBus.emitLog("Invio ${buffered.size} messaggi bufferizzati a $name...")
+        Log.i(LOG_TAG, "Flush di ${buffered.size} messaggi verso $endpointId")
+        TrekMeshBus.emitLog("Invio ${buffered.size} messaggi bufferizzati a $endpointId...")
         buffered.forEach { entity ->
             if (entity.ttl > 0) {
-                val wire = "${entity.id}|${entity.sender}|${entity.ttl}|${entity.text}"
-                val payload = Payload.fromBytes(wire.toByteArray())
+                val msg = MeshMessage(entity.id, entity.sender, entity.ttl, entity.text)
+                val payload = Payload.fromBytes(msg.toWireFormat().toByteArray(Charsets.UTF_8))
                 connectionsClient.sendPayload(endpointId, payload)
             }
         }
         db.messageDao().deleteExpired()
     }
 
-    private suspend fun persistMessage(msg: MeshMessage) {
-        db.messageDao().insert(msg.toEntity())
+    private suspend fun persistMessage(msg: MeshMessage, status: String) {
+        db.messageDao().insert(msg.toEntity(status))
         db.messageDao().pruneOldest(MAX_BUFFER_SIZE)
     }
 
@@ -277,7 +318,12 @@ class TrekMeshService : Service() {
             }
     }
 
-    private fun generateEndpointName(): String = "Hiker-%04X".format(Random.nextInt(0x10000))
+    private fun generateEndpointName(): String {
+        val bytes = ByteArray(4)
+        SecureRandom().nextBytes(bytes)
+        val hex = bytes.joinToString("") { "%02X".format(it) }
+        return "Hiker-$hex"
+    }
 
     private fun createNotificationChannel() {
         val channel = NotificationChannel(

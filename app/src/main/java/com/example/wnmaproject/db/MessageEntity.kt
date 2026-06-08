@@ -9,5 +9,6 @@ data class MessageEntity(
     val sender: String,
     val ttl: Int,
     val text: String,
+    val status: String = "PENDING",
     val timestamp: Long = System.currentTimeMillis()
 )
