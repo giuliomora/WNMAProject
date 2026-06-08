@@ -1,75 +1,61 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/main"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="16dp">
-
-    <Button
-        android:id="@+id/button_start_trekmesh"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Avvia TrekMesh" />
-
-    <!-- Chat messages -->
-    <ScrollView
-        android:id="@+id/scroll_chat"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="2"
-        android:fillViewport="true"
-        android:paddingTop="12dp">
-
-        <TextView
-            android:id="@+id/text_chat"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textIsSelectable="true" />
-    </ScrollView>
-
-    <!-- System log -->
-    <ScrollView
-        android:id="@+id/scroll_log"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:fillViewport="true"
-        android:paddingTop="4dp"
-        android:background="#11000000">
-
-        <TextView
-            android:id="@+id/text_log_console"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Console TrekMesh\n"
-            android:textSize="11sp"
-            android:textColor="#AAFFFFFF"
-            android:textIsSelectable="true"
-            android:padding="4dp" />
-    </ScrollView>
+    android:layout_height="match_parent">
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:paddingTop="8dp">
+        android:layout_height="match_parent"
+        android:orientation="vertical">
 
-        <EditText
-            android:id="@+id/edit_message"
-            android:layout_width="0dp"
+        <com.google.android.material.tabs.TabLayout
+            android:id="@+id/tab_layout"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:hint="Scrivi un messaggio..."
-            android:inputType="text"
-            android:imeOptions="actionSend" />
+            app:tabGravity="fill"
+            app:tabMode="fixed" />
 
-        <Button
-            android:id="@+id/button_send"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:text="Invia" />
+        <androidx.viewpager2.widget.ViewPager2
+            android:id="@+id/view_pager"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
     </LinearLayout>
 
-</LinearLayout>
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_debug_reset"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|start"
+        android:layout_margin="16dp"
+        android:contentDescription="Reset debug"
+        android:visibility="gone"
+        app:srcCompat="@android:drawable/ic_menu_delete"
+        app:backgroundTint="#880E4F" />
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_sos"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="88dp"
+        android:contentDescription="SOS rapido"
+        app:srcCompat="@android:drawable/ic_dialog_alert"
+        app:backgroundTint="#F44336" />
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_compose"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="16dp"
+        android:contentDescription="Nuovo messaggio"
+        app:srcCompat="@android:drawable/ic_input_add"
+        app:backgroundTint="#4CAF50" />
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
