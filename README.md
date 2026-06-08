@@ -18,7 +18,7 @@ TrekMesh itself does not explicitly choose between Bluetooth Low Energy (BLE) an
 - If Wi‑Fi Direct is unavailable (or Wi‑Fi is turned off) Nearby will use BLE for low‑power, short‑range communication.
 - Nearby may attempt multiple transports in parallel and choose the one that completes connection establishment first.
 
-If you want to force a specific transport during testing, you can disable the other radio on the device (for example, turn off Wi‑Fi to force BLE, or turn off Bluetooth to force Wi‑Fi Direct). The app logs and runtime behavior will reflect which transport was actually used.
+If you want to force a specific transport during testing, you can disable the other radio on the device (for example, turn off Wi‑Fi to force BLE, or turn off Bluetooth to force Wi‑Fi Direct).
 
 ---
 
@@ -28,31 +28,48 @@ If you want to force a specific transport during testing, you can disable the ot
 - Devices automatically discover nearby endpoints using **Google Nearby Connections API**
 - No manual pairing or user confirmation required (seamless UX)
 - Simultaneous **Advertising** and **Discovery** in background
-- Each device generates a unique endpoint name (e.g., `Hiker-4A2B`) for identification
+- Each device generates a cryptographically random ephemeral name (e.g., `Hiker-A3F9C102`) using `SecureRandom` — changes each session for privacy
+- Duplicate connection deduplication: the same physical device discovered via multiple transports (BT + WiFi) is connected only once
 
 ### 2. **Mesh Topology (M-to-N)**
 - Uses **Strategy.P2P_CLUSTER** for true mesh networking
-- Unlike star topology, each device can communicate with multiple peers simultaneously
+- Each device can communicate with multiple peers simultaneously
 - Enables data propagation across multiple hops
 - Ideal for Delay Tolerant Networks where devices may not have continuous connectivity
 
-### 3. **Foreground Service with Doze Protection**
+### 3. **Store-and-Forward DTN Messaging**
+- Messages are persisted in a local **Room database** and forwarded when peers become available
+- Each message carries a **TTL (Time To Live)** counter (default: 7 hops), decremented at each relay
+- On connection, the full buffer is flushed to the newly connected peer (store-and-forward)
+- Message deduplication via `seenMessageIds` — IDs persist across app restarts
+- Buffer capped at 200 messages; oldest entries pruned automatically
+- Messages with TTL ≤ 0 are purged from the DB after flush
+
+### 4. **AES-256-GCM Payload Encryption**
+- All message payloads are encrypted with **AES-256-GCM** before transmission
+- A fresh 12-byte IV is generated with `SecureRandom` for every message
+- Pre-shared symmetric key (256-bit); all devices with the app share the same key
+- Messages that fail decryption (wrong key, tampering) are silently discarded
+- Wire format: `MSG|<id>|<sender>|<ttl>|<base64(IV + ciphertext)>`
+
+### 5. **Delivery Acknowledgement (ACK)**
+- When a message is received for the first time, the receiving device sends an **ACK** directly back to the sender
+- ACK wire format: `ACK|<originalMsgId>|<receiverName>`
+- Message status in the UI transitions from `⏳ PENDING` to `✓ DELIVERED` upon ACK receipt
+- Status is persisted in the Room database
+- ACKs are point-to-point (not mesh-flooded) and are sent only once per message
+
+### 6. **Split Chat / System Log UI**
+- **Chat area** (upper 2/3): shows only user messages with sender name and delivery status
+- **System log** (lower 1/3): shows connection events, errors, and delivery confirmations for sent messages
+- Both areas auto-scroll on new content
+- Delivery confirmation (`Messaggio consegnato a Hiker-XXXX`) shown in log only for messages sent by this device, and only once per message
+
+### 7. **Foreground Service with Boot Auto-Start**
 - Runs as a **Foreground Service** with persistent notification
 - Prevents Android Doze Mode from terminating the service
 - Returns `START_STICKY` to auto-recover from out-of-memory kills
-- Notification provides visual indicator that P2P networking is active
-
-### 4. **Automatic Payload Exchange**
-- Upon successful connection (STATUS_OK), devices automatically exchange a **BYTES payload**
-- Payload format: `"Ping ricevuto da [EndpointName]"`
-- All incoming payloads are logged to **Logcat** and displayed in real-time on the UI console
-- Enables real-time debugging during outdoor testing
-
-### 5. **Real-Time UI Console**
-- Live log display of all network events and payloads
-- Manual start/stop button for TrekMeshService
-- Displays permission status and connection diagnostics
-- Useful for field testing and debugging
+- `BootReceiver` restarts the service automatically after device reboot
 
 ---
 
@@ -61,32 +78,16 @@ If you want to force a specific transport during testing, you can disable the ot
 ### Connectivity Types
 
 #### **Bluetooth Low Energy (BLE)**
-- **Protocol**: BLE 4.0+ (Bluetooth 5.0 preferred)
 - **Range**: ~50-100 meters in open field, ~10-30 meters indoors
-- **Frequency**: 2.4 GHz ISM band
 - **Power Consumption**: ~5-10 mA transmitting, <1 mA idle
-- **Bandwidth**: ~125 Kbps (suitable for small payloads)
-- **Use Case**: Primary transport for nearby devices; low power consumption
-- **Android Requirement**: `BLUETOOTH_SCAN`, `BLUETOOTH_ADVERTISE`, `BLUETOOTH_CONNECT` permissions (Android 12+)
+- **Bandwidth**: ~125 Kbps
+- **Android Requirement**: `BLUETOOTH_SCAN`, `BLUETOOTH_ADVERTISE`, `BLUETOOTH_CONNECT` (Android 12+)
 
 #### **Wi-Fi Direct (P2P)**
-- **Protocol**: IEEE 802.11p/ac (5 GHz or 2.4 GHz)
 - **Range**: ~100-200 meters in open field
-- **Frequency**: 2.4 GHz or 5 GHz (device-dependent)
 - **Power Consumption**: ~150-300 mA transmitting
-- **Bandwidth**: ~11-54+ Mbps (suitable for larger payloads)
-- **Use Case**: Secondary transport for longer-range or higher-bandwidth scenarios
-- **Android Requirement**: `NEARBY_WIFI_DEVICES`, `ACCESS_FINE_LOCATION` permissions (Android 13+)
-- **Note**: Requires Wi-Fi direct capable hardware; automatic fallback if unavailable
-
-#### **Selection Strategy (Google Nearby Connections)**
-Google Nearby Connections API **automatically selects the best transport** based on:
-1. Device capabilities (BLE vs. Wi-Fi direct support)
-2. Current radio state (enabled/disabled)
-3. Proximity and signal strength
-4. Available bandwidth and latency requirements
-
-The app uses **dual-mode capability**: if BLE is unavailable, Nearby switches to Wi-Fi Direct, and vice versa.
+- **Bandwidth**: ~11-54+ Mbps
+- **Android Requirement**: `NEARBY_WIFI_DEVICES`, `ACCESS_FINE_LOCATION` (Android 13+)
 
 ---
 
@@ -95,22 +96,21 @@ The app uses **dual-mode capability**: if BLE is unavailable, Nearby switches to
 ### M-to-N Mesh Topology (P2P_CLUSTER Strategy)
 
 ```
-        Device A (Hiker-1234)
+        Device A (Hiker-A3F9C102)
            /         \
           /           \
     Device B        Device C
-   (Hiker-5678)    (Hiker-9ABC)
+  (Hiker-00B1E4F2)  (Hiker-CC74A801)
          \            /
           \          /
-           Device D (Hiker-DEF0)
+           Device D (Hiker-5512DE90)
 ```
 
 **Characteristics:**
 - **Multiple connections per device**: Each device can maintain N simultaneous connections
 - **No central server/hub**: Truly decentralized
 - **Self-healing**: If one device goes offline, others remain connected
-- **Flood-capable**: Data can propagate through multiple hops (with proper routing logic)
-- **Resilient**: Works in partial connectivity scenarios (DTN paradigm)
+- **Flood routing**: Messages propagate through multiple hops, bounded by TTL
 
 ---
 
@@ -119,154 +119,98 @@ The app uses **dual-mode capability**: if BLE is unavailable, Nearby switches to
 TrekMesh implements DTN principles:
 
 1. **Intermittent Connectivity**: Devices may be disconnected for extended periods and reconnect dynamically
-2. **End-to-End Delay**: There is no guarantee of immediate delivery; store-and-forward semantics apply
-3. **Graceful Degradation**: Network operates correctly even with poor RF conditions
-4. **Asynchronous Exchange**: Messages are deposited at intermediate nodes if destination is unreachable
+2. **Store-and-Forward**: Messages are buffered locally and delivered when a peer comes in range
+3. **TTL-bounded Flooding**: Each relay decrements the TTL; expired messages stop propagating
+4. **Deduplication**: `seenMessageIds` prevents loops and redundant delivery
 5. **Opportunistic Routing**: Uses Nearby Connections for opportunistic discovery and connection
 
 ---
 
-## Android Permissions
+## Wire Protocol
 
-The application requires the following runtime permissions:
+All payloads are UTF-8 encoded byte arrays. Two packet types are defined:
 
-### Core P2P Permissions
-- **BLUETOOTH_SCAN** (Android 12+): Scan for nearby Bluetooth devices
-- **BLUETOOTH_ADVERTISE** (Android 12+): Advertise this device via Bluetooth
-- **BLUETOOTH_CONNECT** (Android 12+): Establish Bluetooth connections
-- **NEARBY_WIFI_DEVICES** (Android 13+): Access Wi-Fi Direct peers
-- **FOREGROUND_SERVICE** (all versions): Allow foreground service
-- **FOREGROUND_SERVICE_CONNECTED_DEVICE** (Android 14+): Specify foreground service type
+| Type | Format | Description |
+|------|--------|-------------|
+| `MSG` | `MSG\|<uuid>\|<sender>\|<ttl>\|<base64(IV+ciphertext)>` | User message, AES-GCM encrypted text |
+| `ACK` | `ACK\|<originalMsgId>\|<receiverName>` | Delivery acknowledgement, plaintext |
 
-### Location Permissions (Required for BLE scanning on Android <13)
-- **ACCESS_FINE_LOCATION**: High-precision location (required for BLE on Android <13)
-- **ACCESS_COARSE_LOCATION**: Network-based location (fallback on Android <13)
-- **Note**: On Android 13+, location is not required for BLE scanning due to privacy changes
+ACKs are never stored or forwarded through the mesh.
 
-### UI Permissions
-- **POST_NOTIFICATIONS** (Android 13+): Display foreground service notification
+---
+
+## Message Status Lifecycle
+
+```
+[User sends]  →  PENDING (⏳)
+                    |
+              [ACK received from first peer]
+                    |
+               DELIVERED (✓)
+```
+
+Status is persisted in the Room database and shown in the chat UI.
 
 ---
 
 ## Architecture Components
 
 ### 1. **MainActivity** (UI Layer)
-- **Responsibility**: User interface and permission management
-- **Flow**:
-  1. Request runtime permissions using AndroidX Activity Result API
-  2. Display "Start TrekMesh" button
-  3. Launch TrekMeshService on button click
-  4. Collect and display logs from TrekMeshBus in real-time
-  5. Auto-scroll console to show incoming payloads
+- Permission management via AndroidX Activity Result API
+- Collects `TrekMeshBus.messages` (chat) and `TrekMeshBus.logs` (system log) separately
+- Renders `ChatMessage` objects with label, text, and status icon
 
 ### 2. **TrekMeshService** (Networking Layer)
-- **Responsibility**: Manage P2P networking lifecycle
-- **Components**:
-  - **ConnectionsClient**: Google Nearby Connections API interface
-  - **ConnectionLifecycleCallback**: Handle connection state changes (initiated, resolved, disconnected)
-  - **EndpointDiscoveryCallback**: Discover nearby endpoints; auto-request connection
-  - **PayloadCallback**: Receive payloads; emit to TrekMeshBus for UI display
-- **Foreground Service**: Persistent notification with `FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE`
-- **Lifecycle**:
-  - `onCreate()`: Initialize ConnectionsClient
-  - `onStartCommand()`: Start foreground notification, initiate Advertising + Discovery
-  - `onDestroy()`: Cleanup Bluetooth/Wi-Fi resources
+- Manages P2P networking lifecycle as a Foreground Service
+- Handles MSG/ACK wire protocol parsing and dispatch
+- Encrypts outgoing messages and decrypts incoming ones via `CryptoHelper`
+- Tracks `connectedEndpoints`, `pendingEndpoints`, `endpointNames` for deduplication
+- Tracks `ownMessageIds` to log delivery confirmation only for sent messages
+- `listenForOutgoingMessages()` started in `onCreate()` to prevent duplicate collectors on service restart
 
-### 3. **TrekMeshBus** (Event Bus / Reactive Layer)
-- **Pattern**: Singleton reactive bus using Kotlin `SharedFlow`
-- **Responsibility**: Decouple networking layer from UI layer
-- **Usage**:
-  - TrekMeshService emits log messages via `TrekMeshBus.emitLog(message)`
-  - MainActivity collects messages via `TrekMeshBus.logs.collect { ... }` in a coroutine
-  - Supports multiple subscribers (extensible for future components)
+### 3. **TrekMeshBus** (Reactive Event Bus)
+- Singleton using Kotlin `StateFlow` / `SharedFlow`
+- `logs`: system events (connection, errors, delivery confirmations)
+- `messages`: chat messages as `ChatMessage(id, label, text, status)`
+- `outgoing`: user-typed messages forwarded to the service
+- `updateMessageStatus(id, status)`: updates status in the chat list reactively
 
----
+### 4. **CryptoHelper** (Encryption)
+- AES-256-GCM encryption/decryption
+- Per-message 12-byte IV via `SecureRandom`
+- Pre-shared 256-bit key hardcoded in the app
 
-## Runtime Behavior
-
-### Startup Sequence
-```
-1. User launches MainActivity
-2. MainAcitivity requests permissions (Activity Result API)
-3. User grants permissions
-4. User taps "Avvia TrekMesh" button
-5. MainActivity starts TrekMeshService
-6. TrekMeshService creates NotificationChannel
-7. TrekMeshService calls startForeground() with persistent notification
-8. TrekMeshService initializes ConnectionsClient
-9. TrekMeshService starts Advertising (announces this device)
-10. TrekMeshService starts Discovery (listens for other devices)
-```
-
-### Discovery & Connection Flow
-```
-Device A (Advertising + Discovery)          Device B (Advertising + Discovery)
-        |                                           |
-        +--- "Advertising Hiker-1234" ------->    |
-        |                                           |
-        |                              <------ "Advertising Hiker-5678" --+
-        |                                           |
-        +--- "Discovery: Found Hiker-5678" ------+
-        |                                           |
-        +--- requestConnection(Hiker-5678) ------->|
-        |                                           |
-        |                 "onConnectionInitiated"  |--- "onConnectionInitiated"
-        |                           |               |          |
-        |           acceptConnection(Hiker-1234) <-+---------'
-        |                           |               |
-        |                "onConnectionResult"       |--- "onConnectionResult"
-        |                   (STATUS_OK)             |    (STATUS_OK)
-        |                           |               |
-        +--- sendPayload("Ping from Hiker-1234") ->|
-        |                           |               |--- onPayloadReceived
-        |                           |               |    -> emitLog()
-        |                           |               |
-        +--- onPayloadReceived <----+--- sendPayload...
-        |    -> emitLog()
-        |
-        (Payload logged to Logcat & UI Console)
-```
-
-### Payload Format
-- **Type**: BYTES
-- **Encoding**: UTF-8
-- **Sample**: `"Ping ricevuto da Hiker-4A2B"`
-- **Flow**: Sent automatically on successful connection; not user-triggered
+### 5. **Room Database** (Persistence)
+- `MessageEntity`: id, sender, ttl, text, status, timestamp
+- `MessageDao`: insert, getAll, getAllIds, updateStatus, deleteExpired, pruneOldest
+- Schema version 2 (migration from v1 adds `status` column)
 
 ---
 
-## Connectivity Options Comparison
+## Android Permissions
 
-| Feature | BLE | Wi-Fi Direct |
-|---------|-----|--------------|
-| **Range** | 50-100m | 100-200m |
-| **Bandwidth** | ~125 Kbps | ~11-54+ Mbps |
-| **Power** | ~5-10 mA | ~150-300 mA |
-| **Latency** | ~10-100ms | ~1-10ms |
-| **Concurrent Connections** | 4-8 | 1 (group owner) |
-| **Setup Time** | ~1-2s | ~3-5s |
-| **Android Support** | All devices (BLE 4.0+) | Device-dependent |
-
-**Google Nearby Connections** automatically selects the optimal transport. In practice:
-- For short-range, low-latency mesh: **BLE**
-- For longer-range, higher-bandwidth: **Wi-Fi Direct** (if available)
-- For best coverage: **Dual-mode** (both simultaneously)
+| Permission | Version | Purpose |
+|-----------|---------|---------|
+| `BLUETOOTH_SCAN` | Android 12+ | Scan for nearby BT devices |
+| `BLUETOOTH_ADVERTISE` | Android 12+ | Advertise via Bluetooth |
+| `BLUETOOTH_CONNECT` | Android 12+ | Establish BT connections |
+| `NEARBY_WIFI_DEVICES` | Android 13+ | Wi-Fi Direct peers |
+| `ACCESS_FINE_LOCATION` | Android <13 | Required for BLE scanning |
+| `POST_NOTIFICATIONS` | Android 13+ | Foreground service notification |
+| `FOREGROUND_SERVICE_CONNECTED_DEVICE` | Android 14+ | Service type declaration |
+| `RECEIVE_BOOT_COMPLETED` | All | Auto-start after reboot |
 
 ---
 
 ## Dependencies
 
-### Core Libraries
-- **Google Nearby Connections API** (`com.google.android.gms:play-services-nearby:18.7.0`)
-  - Handles discovery, connection, and payload exchange
-  - Abstracts BLE/Wi-Fi Direct complexity
-
-- **AndroidX Lifecycle & Coroutines** (`androidx.lifecycle:lifecycle-runtime-ktx:2.8.7`, `kotlinx-coroutines-android:1.8.1`)
-  - Reactive UI updates with cancellation support
-  - Lifecycle-aware coroutine scopes
-
-- **AndroidX Core-KTX** (`androidx.core:core-ktx:1.13.1`)
-  - Compatibility layer for newer Android features
+| Library | Version | Purpose |
+|---------|---------|---------|
+| `play-services-nearby` | 18.7.0 | P2P discovery, connection, payload |
+| `androidx.room` | 2.6.1 | Local message persistence |
+| `kotlinx-coroutines-android` | 1.8.1 | Async networking and DB access |
+| `androidx.lifecycle` | 2.8.7 | Lifecycle-aware coroutine scopes |
+| `androidx.core-ktx` | 1.13.1 | Android compatibility layer |
 
 ---
 
@@ -275,50 +219,44 @@ Device A (Advertising + Discovery)          Device B (Advertising + Discovery)
 ### Prerequisites
 - Minimum 2 Android devices (SDK 26+)
 - Google Play Services updated
-- Bluetooth enabled
-- (Optional) Wi-Fi enabled for Wi-Fi Direct fallback
+- Bluetooth enabled; Wi-Fi optional
 
 ### Test Steps
 1. Install TrekMesh on both devices
-2. Launch app on Device A; grant permissions; tap "Avvia TrekMesh"
-3. Launch app on Device B; grant permissions; tap "Avvia TrekMesh"
-4. Observe Logcat filter: `TrekMeshService`
-   - Expected: "Advertising avviato", "Discovery avviato"
-5. Verify console shows Endpoint discovery and Ping exchange
-6. Move one device out of range and back; observe reconnection
+2. Launch app on both devices; grant permissions; tap "Avvia TrekMesh"
+3. Wait for automatic discovery and connection (logged in system log)
+4. Send a message from Device A; observe `⏳` → `✓` transition and delivery log
+5. Disconnect one device; send a message; reconnect — verify store-and-forward delivery
 
-### Logcat Output Example
+### Expected Log Output
 ```
-TrekMeshService: Advertising avviato
-TrekMeshService: Discovery avviato
-TrekMeshService: Endpoint trovato: Hiker-5678 (endpoint-abc123)
-TrekMeshService: Connessione iniziata da Hiker-5678
-TrekMeshService: Connessione OK con endpoint-abc123, inviato ping
-TrekMeshService: Payload da endpoint-abc123: Ping ricevuto da Hiker-1234
+[Hiker-A3F9C102] In ascolto di altri dispositivi...
+Scansione dispositivi vicini avviata...
+Dispositivo trovato: Hiker-CC74A801, richiedo connessione...
+Connesso a Hiker-CC74A801
+Invio 3 messaggi bufferizzati a Hiker-CC74A801...
+Messaggio consegnato a Hiker-CC74A801
 ```
 
 ---
 
-## Battery & Power Optimization
+## Security Notes
 
-- **Foreground Service**: Exempts the app from Doze Mode aggressive killing
-- **Adaptive Advertising**: Nearby Connections uses low-power scanning intervals
-- **BLE Preference**: BLE is lower-power than Wi-Fi Direct; Nearby selects accordingly
-- **Background Limitations**: On Android 11+, background radios may be throttled; foreground service minimizes impact
+- The pre-shared AES-256 key provides confidentiality against passive eavesdroppers who do not have the app installed
+- GCM authentication tag (128-bit) detects payload tampering; tampered messages are silently dropped
+- Endpoint names are ephemeral (regenerated each session via `SecureRandom`) to prevent device tracking
+- A future version should replace the pre-shared key with an authenticated key exchange (e.g., ECDH)
 
 ---
 
 ## Future Enhancements
 
-1. **Persistent Storage**: Cache discovered peers and payload history
-2. **Routing Logic**: Implement hop-based message forwarding (true DTN routing)
-3. **Data Compression**: Compress payloads for bandwidth efficiency
-4. **Variable Payload Types**: Support BYTES, FILE, STREAM payloads
-5. **Battery Indicator**: Display remaining battery on each peer
-6. **Custom Beacon Format**: Exchange device metadata (name, battery, location)
-7. **Boot Receiver**: Auto-start TrekMeshService on device reboot
-8. **Exemption Request**: Request Battery Optimization exemption dialog
-9. **UI Enhancements**: Peer list, connection status indicators, statistics
+1. **Authenticated Key Exchange**: Replace pre-shared key with ECDH (Diffie-Hellman) per session
+2. **Routing Metrics**: Implement PRoPHET or Epidemic routing instead of simple flooding
+3. **Location Beaconing**: Attach GPS coordinates to messages for emergency scenarios
+4. **Battery Indicator**: Exchange and display peer battery levels
+5. **File Transfer**: Support STREAM/FILE payload types for larger data
+6. **UI Polish**: Peer list with connection status, signal strength indicators
 
 ---
 
@@ -332,8 +270,7 @@ This project is provided as-is for educational and research purposes.
 
 TrekMesh - Delay Tolerant Network Stack for Android
 
-**Target SDK**: Android 34  
-**Min SDK**: Android 26  
-**Language**: Kotlin  
-**Architecture**: Native Android (no external libraries except Google Play Services)
-
+**Target SDK**: Android 34
+**Min SDK**: Android 26
+**Language**: Kotlin
+**Architecture**: Native Android (no external framework except Google Play Services + AndroidX)
