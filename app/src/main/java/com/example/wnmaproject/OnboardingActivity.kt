@@ -62,7 +62,12 @@ class OnboardingActivity : AppCompatActivity() {
     }
 
     private fun proceedToMain() {
-        startActivity(Intent(this, MainActivity::class.java))
+        val next = if (UserRolePrefs.getRole(this) == null) {
+            RoleSelectionActivity::class.java
+        } else {
+            MainActivity::class.java
+        }
+        startActivity(Intent(this, next))
         finish()
     }
 

@@ -213,6 +213,23 @@ class TrekMeshService : Service() {
         }
         sendAck(endpointId, msgId)
 
+        if (type == "SOS" && priority >= 3 && UserRolePrefs.getRole(this) == UserRole.RIFUGIO) {
+            serviceScope.launch {
+                val relayed = ProtezioneCivileRelay.sendAlert(
+                    messageId = msgId,
+                    sender = sender,
+                    type = type,
+                    priority = priority,
+                    text = text,
+                    description = description,
+                    rifugioName = localEndpointName
+                )
+                val logMsg = if (relayed) "SOS inoltrato alla Protezione Civile ✓"
+                             else "Impossibile inoltrare SOS alla Protezione Civile (nessuna connessione?)"
+                TrekMeshBus.emitLog(logMsg)
+            }
+        }
+
         if (ttl > 1) {
             val forward = MeshMessage(msgId, sender, ttl - 1, type, priority, text, description)
             serviceScope.launch { persistMessage(forward, "RECEIVED") }
@@ -298,6 +315,23 @@ class TrekMeshService : Service() {
                 TrekMeshBus.emitMessage(msg.id, localEndpointName, msg.type, msg.priority,
                     msg.text, msg.description, msg.imagePath, isOwn = true)
 
+                if (msg.type == "SOS" && msg.priority >= 3) {
+                    serviceScope.launch {
+                        val relayed = ProtezioneCivileRelay.sendAlert(
+                            messageId = msg.id,
+                            sender = localEndpointName,
+                            type = msg.type,
+                            priority = msg.priority,
+                            text = msg.text,
+                            description = msg.description,
+                            rifugioName = localEndpointName
+                        )
+                        val logMsg = if (relayed) "SOS inoltrato alla Protezione Civile ✓"
+                                     else "Impossibile inoltrare SOS alla Protezione Civile (nessuna connessione?)"
+                        TrekMeshBus.emitLog(logMsg)
+                    }
+                }
+
                 if (connectedEndpoints.isEmpty()) {
                     TrekMeshBus.emitLog("Nessun dispositivo connesso — messaggio bufferizzato")
                     return@collect
@@ -380,7 +414,12 @@ class TrekMeshService : Service() {
     private fun generateEndpointName(): String {
         val bytes = ByteArray(4)
         SecureRandom().nextBytes(bytes)
-        return "Hiker-" + bytes.joinToString("") { "%02X".format(it) }
+        val suffix = bytes.joinToString("") { "%02X".format(it) }
+        val prefix = when (UserRolePrefs.getRole(this)) {
+            UserRole.RIFUGIO -> "Rifugio"
+            else -> "Hiker"
+        }
+        return "$prefix-$suffix"
     }
 
     private fun createNotificationChannel() {
