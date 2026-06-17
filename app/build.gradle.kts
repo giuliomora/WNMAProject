@@ -16,6 +16,8 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "PC_API_KEY", "\"${project.findProperty("PC_API_KEY") ?: ""}\"")
     }
 
     buildTypes {

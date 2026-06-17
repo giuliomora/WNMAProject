@@ -5,6 +5,10 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.os.Build
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
@@ -31,6 +35,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class TrekMeshService : Service() {
@@ -38,9 +44,12 @@ class TrekMeshService : Service() {
     companion object {
         private const val LOG_TAG = "TrekMeshService"
         private const val NOTIFICATION_CHANNEL_ID = "trekmesh_p2p_channel"
+        private const val NOTIFICATION_CHANNEL_ALERT_ID = "trekmesh_alert_channel"
         private const val NOTIFICATION_ID = 1
+        private const val NOTIFICATION_ALERT_BASE_ID = 1000
         private const val INITIAL_TTL = 7
         private const val MAX_BUFFER_SIZE = 200
+        private const val CLEANUP_INTERVAL_MS = 30 * 60 * 1000L
         private const val TYPE_MSG = "MSG"
         private const val TYPE_ACK = "ACK"
         private const val FIELD_SEP = "" // ASCII Unit Separator
@@ -70,6 +79,15 @@ class TrekMeshService : Service() {
     private lateinit var localEndpointName: String
     private lateinit var db: TrekMeshDatabase
     private lateinit var imagesDir: File
+    private lateinit var connectivityManager: ConnectivityManager
+
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            serviceScope.launch {
+                ProtezioneCivileRelay.retryPending(db.pendingAlertDao())
+            }
+        }
+    }
 
     private val connectedEndpoints = mutableSetOf<String>()
     private val pendingEndpoints = mutableSetOf<String>()
@@ -83,6 +101,7 @@ class TrekMeshService : Service() {
     private val pendingFileForMessage = mutableMapOf<Long, String>()
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var alertNotificationCounter = NOTIFICATION_ALERT_BASE_ID
 
     private val connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
         override fun onConnectionInitiated(endpointId: String, connectionInfo: ConnectionInfo) {
@@ -212,6 +231,7 @@ class TrekMeshService : Service() {
             db.messageDao().insert(MessageEntity(msgId, sender, receivedTtl, type, priority, text, description, null, "RECEIVED"))
         }
         sendAck(endpointId, msgId)
+        showMessageNotification(sender, type, priority, text)
 
         if (type == "SOS" && priority >= 3 && UserRolePrefs.getRole(this) == UserRole.RIFUGIO) {
             serviceScope.launch {
@@ -222,10 +242,11 @@ class TrekMeshService : Service() {
                     priority = priority,
                     text = text,
                     description = description,
-                    rifugioName = localEndpointName
+                    rifugioName = localEndpointName,
+                    dao = db.pendingAlertDao()
                 )
                 val logMsg = if (relayed) "SOS inoltrato alla Protezione Civile ✓"
-                             else "Impossibile inoltrare SOS alla Protezione Civile (nessuna connessione?)"
+                             else "Connessione assente — SOS in coda, verrà reinoltrato automaticamente"
                 TrekMeshBus.emitLog(logMsg)
             }
         }
@@ -259,6 +280,11 @@ class TrekMeshService : Service() {
         localEndpointName = generateEndpointName()
         db = TrekMeshDatabase.getInstance(this)
         imagesDir = File(filesDir, "images").also { it.mkdirs() }
+        connectivityManager = getSystemService(ConnectivityManager::class.java)
+        val request = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+        connectivityManager.registerNetworkCallback(request, networkCallback)
         serviceScope.launch {
             seenMessageIds += db.messageDao().getAllIds()
             db.messageDao().getAll().forEach { e ->
@@ -281,6 +307,7 @@ class TrekMeshService : Service() {
             }
         }
         listenForOutgoingMessages()
+        startPeriodicCleanup()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -324,10 +351,11 @@ class TrekMeshService : Service() {
                             priority = msg.priority,
                             text = msg.text,
                             description = msg.description,
-                            rifugioName = localEndpointName
+                            rifugioName = localEndpointName,
+                            dao = db.pendingAlertDao()
                         )
                         val logMsg = if (relayed) "SOS inoltrato alla Protezione Civile ✓"
-                                     else "Impossibile inoltrare SOS alla Protezione Civile (nessuna connessione?)"
+                                     else "Connessione assente — SOS in coda, verrà reinoltrato automaticamente"
                         TrekMeshBus.emitLog(logMsg)
                     }
                 }
@@ -397,6 +425,17 @@ class TrekMeshService : Service() {
         db.messageDao().pruneOldest(MAX_BUFFER_SIZE)
     }
 
+    private fun startPeriodicCleanup() {
+        serviceScope.launch {
+            while (isActive) {
+                delay(CLEANUP_INTERVAL_MS)
+                db.messageDao().deleteExpired()
+                db.messageDao().pruneOldest(MAX_BUFFER_SIZE)
+                Log.d(LOG_TAG, "Cleanup periodico eseguito")
+            }
+        }
+    }
+
     private fun startNetworking() {
         val advertisingOptions = AdvertisingOptions.Builder().setStrategy(Strategy.P2P_CLUSTER).build()
         val discoveryOptions = DiscoveryOptions.Builder().setStrategy(Strategy.P2P_CLUSTER).build()
@@ -422,11 +461,36 @@ class TrekMeshService : Service() {
         return "$prefix-$suffix"
     }
 
+    private fun showMessageNotification(sender: String, type: String, priority: Int, text: String) {
+        val isSos = type == "SOS"
+        val title = if (isSos) "🆘 SOS da $sender (priorità $priority)" else "📩 Messaggio da $sender"
+        val nm = getSystemService(NotificationManager::class.java) ?: return
+        val notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ALERT_ID)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setPriority(if (isSos) NotificationCompat.PRIORITY_MAX else NotificationCompat.PRIORITY_HIGH)
+            .setCategory(if (isSos) NotificationCompat.CATEGORY_ALARM else NotificationCompat.CATEGORY_MESSAGE)
+            .setVibrate(if (isSos) longArrayOf(0, 500, 200, 500, 200, 500) else longArrayOf(0, 250))
+            .setAutoCancel(true)
+            .build()
+        nm.notify(alertNotificationCounter++, notification)
+    }
+
     private fun createNotificationChannel() {
-        val channel = NotificationChannel(NOTIFICATION_CHANNEL_ID, "TrekMesh Protezione",
+        val nm = getSystemService(NotificationManager::class.java) ?: return
+        val serviceChannel = NotificationChannel(NOTIFICATION_CHANNEL_ID, "TrekMesh Protezione",
             NotificationManager.IMPORTANCE_LOW)
             .apply { description = "Notifica di servizio P2P TrekMesh" }
-        getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
+        val alertChannel = NotificationChannel(NOTIFICATION_CHANNEL_ALERT_ID, "TrekMesh Messaggi",
+            NotificationManager.IMPORTANCE_HIGH)
+            .apply {
+                description = "Notifiche per messaggi e SOS ricevuti"
+                enableVibration(true)
+            }
+        nm.createNotificationChannel(serviceChannel)
+        nm.createNotificationChannel(alertChannel)
     }
 
     private fun createNotification(): Notification =
@@ -442,6 +506,7 @@ class TrekMeshService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        connectivityManager.unregisterNetworkCallback(networkCallback)
         serviceScope.cancel()
         connectionsClient.stopAdvertising()
         connectionsClient.stopDiscovery()

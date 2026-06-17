@@ -7,10 +7,11 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [MessageEntity::class], version = 3, exportSchema = false)
+@Database(entities = [MessageEntity::class, PendingAlertEntity::class], version = 4, exportSchema = false)
 abstract class TrekMeshDatabase : RoomDatabase() {
 
     abstract fun messageDao(): MessageDao
+    abstract fun pendingAlertDao(): PendingAlertDao
 
     companion object {
         @Volatile private var INSTANCE: TrekMeshDatabase? = null
@@ -30,13 +31,30 @@ abstract class TrekMeshDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS pending_alerts (
+                        messageId TEXT NOT NULL PRIMARY KEY,
+                        sender TEXT NOT NULL,
+                        type TEXT NOT NULL,
+                        priority INTEGER NOT NULL,
+                        text TEXT NOT NULL,
+                        description TEXT NOT NULL,
+                        rifugioName TEXT NOT NULL,
+                        timestamp INTEGER NOT NULL
+                    )
+                """.trimIndent())
+            }
+        }
+
         fun getInstance(context: Context): TrekMeshDatabase =
             INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
                     context.applicationContext,
                     TrekMeshDatabase::class.java,
                     "trekmesh.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { INSTANCE = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { INSTANCE = it }
             }
     }
 }
