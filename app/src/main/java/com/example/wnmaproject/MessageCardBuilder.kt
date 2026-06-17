@@ -14,15 +14,17 @@ private const val INITIAL_TTL = 7
 fun buildMessageCard(context: Context, msg: ChatMessage): View {
     val isOwn  = msg.label == "Tu"
     val isSos  = msg.type == "SOS"
+    val isBroadcast = msg.type == "BROADCAST"
     val isNearby = !isOwn && isSos && msg.ttl == INITIAL_TTL - 1
 
     val card = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(16, 12, 16, 12)
         setBackgroundColor(when {
-            isNearby -> 0x44F44336.toInt()
-            isSos    -> 0x22F44336.toInt()
-            else     -> 0x11FFFFFF.toInt()
+            isNearby    -> 0x44F44336.toInt()
+            isSos       -> 0x22F44336.toInt()
+            isBroadcast -> 0x22FF9800.toInt() // Arancione per broadcast
+            else        -> 0x11FFFFFF.toInt()
         })
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
@@ -63,7 +65,11 @@ fun buildMessageCard(context: Context, msg: ChatMessage): View {
         textSize = 10f
         setPadding(8, 2, 8, 2)
         setTextColor(0xFFFFFFFF.toInt())
-        setBackgroundColor(if (isSos) 0xCCF44336.toInt() else 0xCC2196F3.toInt())
+        setBackgroundColor(when {
+            isSos       -> 0xCCF44336.toInt()
+            isBroadcast -> 0xCCFF9800.toInt()
+            else        -> 0xCC2196F3.toInt()
+        })
     })
 
     if (isOwn) {

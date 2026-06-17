@@ -1,81 +1,84 @@
-# TrekMesh - Delay Tolerant Network P2P Application
+# 🏔️ TrekMesh: Delay Tolerant P2P Safety Network
 
-## Overview
-
-**TrekMesh** is a native Android application designed to provide reliable, decentralized communication in disconnected environments such as mountain hiking, remote outdoor activities, or disaster recovery scenarios. Using the **Google Nearby Connections API**, it creates an autonomous **Delay Tolerant Network (DTN)** with a **dynamic mesh topology** (M-to-N). 
-
-TrekMesh allows users to exchange text messages and images without cellular coverage or internet. It acts as a safety layer by turning every smartphone into a relay node, ensuring that critical information—especially SOS alerts—reaches its destination through a "hop-by-hop" propagation mechanism.
+**TrekMesh** is a professional-grade Android application designed for decentralized communication in extreme environments. Built on the **Google Nearby Connections API**, it transforms standard smartphones into resilient nodes of a **Delay Tolerant Mesh Network (DTN)**, enabling text, image, and emergency data exchange where cellular and internet infrastructures fail.
 
 ---
 
-## Core Functionalities
+## 🚀 Core Innovation: The Adaptive Safety Stack
 
-### 1. **Adaptive Scanning Algorithm (Battery vs. Range)**
-TrekMesh implements a custom duty-cycle to balance connectivity with battery life:
-- **Low Power Mode (Default):** Uses Bluetooth Low Energy (BLE) and Bluetooth Classic for continuous background discovery with minimal battery impact.
-- **High Power Mode (Deep Scan):** Every 3 minutes, if no peers are found, the app activates **Wi-Fi Direct** for 45 seconds to perform a "Deep Scan," extending the discovery range up to 100m+.
-- **SOS Priority Boost:** Sending an SOS message immediately forces the app into High Power Mode to maximize the probability of reaching a nearby rescuer or gateway.
+TrekMesh goes beyond simple P2P chat by implementing a multi-layered safety protocol designed for the unique challenges of mountain hiking and wilderness exploration.
 
-### 2. **BLE Beaconing (Passive SOS "Digital Flare")**
-In addition to active connections, TrekMesh acts as a **digital emergency beacon**:
-- **Continuous Advertising:** The app broadcasts a low-energy Bluetooth signal (Beacon) every second.
-- **Search & Rescue Friendly:** The signal can be picked up by rescue drones, helicopters, or other users even without establishing a formal data connection.
-- **Passive Detection:** If a "Rifugio" or another user captures an SOS beacon nearby, the app immediately logs an alert: *"Passive SOS signal detected nearby!"*.
-- **Zero-Config:** Works in the background even when the main mesh scanning is in "sleep" mode, providing a constant "heartbeat" safety signal.
+### 🔋 1. Adaptive Scanning Algorithm
+To survive multi-day treks, TrekMesh balances connectivity with battery longevity through an intelligent duty-cycle:
+*   **Low Power Mode (Default):** Uses **Bluetooth Low Energy (BLE)** and Bluetooth Classic for continuous background discovery with negligible battery impact.
+*   **High Power Mode (Deep Scan):** Every **3 minutes**, the app activates **Wi-Fi Direct** for 45 seconds. This "Deep Scan" extends discovery range up to **100m+**, finding peers that Bluetooth might miss.
+*   **SOS Priority Boost:** Any outgoing SOS message instantly overrides the duty-cycle, forcing High Power Mode to maximize the probability of reaching a rescuer or gateway.
 
-### 3. **Mesh Networking & Flood Routing**
-- **Topology:** Uses `Strategy.P2P_CLUSTER` to allow any device to connect to any number of peers.
-- **Multi-hop Routing:** Implements a controlled flooding mechanism. When a message is received, the node decrements its **TTL (Time To Live)** and re-broadcasts it to all other connected peers.
-- **Deduplication:** A persistent `seenMessageIds` cache ensures that redundant messages are ignored, preventing network loops.
+### 📡 2. BLE Beaconing ("Digital SOS Flare")
+Even when the mesh engine is in its sleep cycle, TrekMesh acts as a **Passive Emergency Beacon**:
+*   **Continuous Heartbeat:** Broadcasts a BLE signal every second containing the user's ID and emergency status.
+*   **GPS-Embedded Signal:** The beacon carries compressed Lat/Lon coordinates, allowing search-and-rescue (SAR) drones or helicopters to locate a hiker without a full data handshake.
+*   **Passive Detection:** Rifugios and other hikers log passive detections: *"Passive SOS signal detected nearby (est. 45m)"*.
 
-### 4. **Store-and-Forward Intelligence**
-- **Persistence:** All messages (Sent, Received, Pending) are stored in a local **Room Database**.
-- **Opportunistic Delivery:** If no peers are in range, messages are buffered. As soon as a connection is established, the app "flushes" the pending buffer to the new peer.
-- **Auto-Cleanup:** Expired messages (TTL=0) and old history are automatically pruned to keep the database lean.
+### 🛡️ 3. Proactive Survival Tools
+*   **Virtual Breadcrumbs:** Automatically records GPS coordinates every 15 minutes. Upon an **SOS** trigger, the last 5 positions are attached to the alert, showing rescuers the hiker's path and direction of travel.
+*   **Safety Timer (Dead Man's Switch):** Users can set a countdown (30m, 1h, 2h) via long-press on the SOS button. If the user doesn't press **"I'M OK"** before expiry, the app automatically broadcasts a high-priority SOS with current and historical location data.
+*   **Automatic GPS Stamping:** Every message is cryptographically "stamped" with the sender's Lat/Lon/Alt, enabling real-time proximity awareness.
 
-### 5. **User Roles & Emergency Gateway (SOS Relay)**
-- **Hiker Role:** The standard profile for peer-to-peer communication and mesh relaying.
-- **Rifugio (Mountain Hut) Role:** Acts as a **High-Priority Gateway**. 
-    - When a Rifugio node receives an **SOS** (via Mesh message or Beacon), it alerts the keeper.
-    - **Cloud Integration:** SOS messages received via mesh are forwarded to the **Protezione Civile** (Civil Protection) via an external HTTP API.
-    - **Offline Queueing:** If the Rifugio is offline, the SOS is queued for automatic retry the moment internet connectivity is restored.
+## 🕸️ Mesh Architecture & Intelligence
 
-### 6. **Rich Media & Bandwidth Management**
-- **Image Support:** Users can attach photos to messages (e.g., photo of an injury or landmark).
-- **Auto-Upgrade:** The app automatically performs a **Bandwidth Upgrade** (switching from Bluetooth to Wi-Fi Direct) for image transfers.
+TrekMesh creates a self-healing, multi-hop network using the `Strategy.P2P_CLUSTER` topology.
 
-### 7. **Privacy & End-to-End Security**
-- **AES-256-GCM Encryption:** All mesh message payloads are encrypted end-to-end. 
-- **Ephemeral Identity:** Each session generates a random name (e.g., `Hiker-4B2A`) to prevent device tracking.
+### 🔄 Flood Routing with TTL
+Messages propagate through the network based on a **Time To Live (TTL)** system:
+*   **Standard Messages:** 7 hops (can cover several kilometers in a populated trail).
+*   **Area Broadcasts:** 15 hops (designed to cover wide valleys from a high-altitude gateway).
+*   **Deduplication:** A persistent cache ensures nodes never process or forward the same message twice, preventing "broadcast storms."
+
+### 🚦 Intelligent Quality of Service (QoS)
+The network implements a tiered priority system in the transmission buffer:
+1.  **SOS Messages:** Absolute precedence. They "jump" to the front of the queue.
+2.  **Standard Info:** Direct hiker-to-hiker communication.
+3.  **Area Broadcasts:** Informational alerts (Meteo, Trail status).
 
 ---
 
-## User Interface & Experience
+## 🏠 The Gateway Ecosystem (Rifugio Role)
 
-- **Split-View Dashboard:** 
-    - **Chat Area:** Displays received and sent messages with status icons (`⏳ PENDING`, `✓ DELIVERED`).
-    - **System Log:** Real-time log of network events, handshakes, and **Passive SOS detections**.
-- **Smart Notifications:**
-    - **SOS Alerts** use a dedicated high-importance channel with `PRIORITY_MAX` and a custom vibration pattern.
-
----
-
-## Technical Stack
-
-- **Foreground Service:** Persistent networking engine with `START_STICKY`.
-- **Boot Auto-Start:** Automatically restarts the safety service upon device reboot.
-- **BLE Beacon Tech:** Uses `BluetoothLeAdvertiser` and `BluetoothLeScanner` with a custom UUID.
-- **Wire Protocol:**
-    - `MSG|<uuid>|<sender>|<ttl>|<type>|<priority>|<fileId>|<encryptedBlob>`
-    - `ACK|<msgId>|<ackerName>`
+Nodes can assume two distinct roles to optimize network utility:
+*   **Hiker Role:** Standard profile for communication and mesh relaying.
+*   **Rifugio (Mountain Hut) Role:** Acts as a **High-Priority Safety Gateway**.
+    *   **Cloud SOS Relay:** Automatically forwards mesh-received SOS messages to **Civil Protection** via HTTP API.
+    *   **Auto-Weather Injection:** Fetches weather updates via internet (when available) and broadcasts them into the mesh every hour.
+    *   **Trail Alerts:** Rifugios can send area-wide alerts (e.g., *"Trail 101 closed due to landslide"*) that propagate up to 15 hops.
 
 ---
 
-## Permissions
-TrekMesh requires the following for Android 12-14+:
-- `BLUETOOTH_SCAN`, `BLUETOOTH_ADVERTISE`, `BLUETOOTH_CONNECT`.
-- `NEARBY_WIFI_DEVICES` & `ACCESS_FINE_LOCATION`.
-- `POST_NOTIFICATIONS` & `FOREGROUND_SERVICE_CONNECTED_DEVICE`.
+## 🔒 Privacy & Rich Media
+*   **AES-256-GCM Encryption:** All message payloads, including GPS metadata, are encrypted end-to-end. Tamper protection ensures corrupted data is discarded.
+*   **Bandwidth Upgrade:** The app automatically switches from Bluetooth to Wi-Fi Direct when transferring **images** for situational context.
+*   **Ephemeral Identity:** Random session names (e.g., `Hiker-A3F9`) prevent long-term tracking of hikers.
+
+---
+
+## 🛠️ Technical Stack
+*   **Persistence:** Room Database (v6) with automated pruning and TTL-based expiration.
+*   **Location:** Fused Location Provider API with background altitude tracking.
+*   **Reactive UI:** Kotlin SharedFlow/StateFlow bridge between the **Foreground Service** and the UI.
+*   **Wire Protocol:**
+    | Header | UUID | Sender | TTL | Type | Priority | FileID | Encrypted GeoBlob |
+    | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+    | `MSG` | `uuid` | `name` | `int` | `SOS/INFO` | `1-3` | `long` | `AES-Text+GPS` |
+
+---
+
+## 🔑 Permissions
+| Permission | Requirement |
+| :--- | :--- |
+| `NEARBY_WIFI_DEVICES` | Wi-Fi Direct scanning (Android 13+) |
+| `BLUETOOTH_SCAN/ADVERTISE` | Peer discovery & BLE Beaconing |
+| `ACCESS_FINE_LOCATION` | Accurate GPS stamping & Altitude |
+| `FOREGROUND_SERVICE` | Persistent safety monitoring in background |
 
 ---
 **TrekMesh** - *Safety through connectivity, anywhere.*

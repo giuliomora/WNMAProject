@@ -43,6 +43,17 @@
                 android:text="SOS"
                 android:textSize="14sp"
                 android:backgroundTint="#44F44336" />
+
+            <Button
+                android:id="@+id/btn_type_broadcast"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:text="AVVISO"
+                android:textSize="14sp"
+                android:backgroundTint="#FF9800"
+                android:visibility="gone" />
         </LinearLayout>
 
         <!-- Priorità -->

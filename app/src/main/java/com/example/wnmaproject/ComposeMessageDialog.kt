@@ -28,6 +28,7 @@ class ComposeMessageDialog : DialogFragment() {
 
     private lateinit var btnTypeInfo: Button
     private lateinit var btnTypeSos: Button
+    private lateinit var btnTypeBroadcast: Button
     private lateinit var radioPriority: RadioGroup
     private lateinit var editText: EditText
     private lateinit var editDescription: EditText
@@ -47,6 +48,7 @@ class ComposeMessageDialog : DialogFragment() {
 
         btnTypeInfo      = view.findViewById(R.id.btn_type_info)
         btnTypeSos       = view.findViewById(R.id.btn_type_sos)
+        btnTypeBroadcast = view.findViewById(R.id.btn_type_broadcast)
         radioPriority    = view.findViewById(R.id.radio_priority)
         editText         = view.findViewById(R.id.edit_text)
         editDescription  = view.findViewById(R.id.edit_description)
@@ -56,8 +58,13 @@ class ComposeMessageDialog : DialogFragment() {
 
         setTypeSelected("INFO")
 
+        if (UserRolePrefs.getRole(requireContext()) == UserRole.RIFUGIO) {
+            btnTypeBroadcast.visibility = View.VISIBLE
+        }
+
         btnTypeInfo.setOnClickListener { setTypeSelected("INFO") }
         btnTypeSos.setOnClickListener  { setTypeSelected("SOS") }
+        btnTypeBroadcast.setOnClickListener { setTypeSelected("BROADCAST") }
 
         btnPickImage.setOnClickListener { pickImageLauncher.launch("image/*") }
         btnRemoveImage.setOnClickListener { clearImage() }
@@ -73,10 +80,9 @@ class ComposeMessageDialog : DialogFragment() {
 
     private fun setTypeSelected(type: String) {
         selectedType = type
-        val infoAlpha = if (type == "INFO") 1f else 0.4f
-        val sosAlpha  = if (type == "SOS")  1f else 0.4f
-        btnTypeInfo.alpha = infoAlpha
-        btnTypeSos.alpha  = sosAlpha
+        btnTypeInfo.alpha      = if (type == "INFO") 1f else 0.4f
+        btnTypeSos.alpha       = if (type == "SOS") 1f else 0.4f
+        btnTypeBroadcast.alpha = if (type == "BROADCAST") 1f else 0.4f
     }
 
     private fun trySend() {

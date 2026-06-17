@@ -14,6 +14,9 @@ data class MessageEntity(
     val text: String,
     val description: String = "",
     @ColumnInfo(name = "image_path") val imagePath: String? = null,
+    val lat: Double = 0.0,
+    val lon: Double = 0.0,
+    val alt: Double = 0.0,
     val status: String = "PENDING",
     val timestamp: Long = System.currentTimeMillis()
 )

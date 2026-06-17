@@ -7,11 +7,12 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [MessageEntity::class, PendingAlertEntity::class], version = 4, exportSchema = false)
+@Database(entities = [MessageEntity::class, PendingAlertEntity::class, BreadcrumbEntity::class], version = 6, exportSchema = false)
 abstract class TrekMeshDatabase : RoomDatabase() {
 
     abstract fun messageDao(): MessageDao
     abstract fun pendingAlertDao(): PendingAlertDao
+    abstract fun breadcrumbDao(): BreadcrumbDao
 
     companion object {
         @Volatile private var INSTANCE: TrekMeshDatabase? = null
@@ -54,7 +55,8 @@ abstract class TrekMeshDatabase : RoomDatabase() {
                     context.applicationContext,
                     TrekMeshDatabase::class.java,
                     "trekmesh.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { INSTANCE = it }
+                ).fallbackToDestructiveMigration()
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { INSTANCE = it }
             }
     }
 }

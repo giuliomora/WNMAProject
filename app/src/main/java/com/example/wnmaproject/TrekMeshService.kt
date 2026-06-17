@@ -1,4 +1,4 @@
-package com.example.wnmaproject
+package com.example.trekmesh
 
 import android.annotation.SuppressLint
 import android.app.Notification
@@ -14,23 +14,26 @@ import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Intent
+import android.location.Location
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.os.Build
 import android.os.IBinder
+import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.os.ParcelUuid
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.example.trekmesh.CryptoHelper
-import com.example.trekmesh.ProtezioneCivileRelay
-import com.example.trekmesh.TrekMeshBus
-import com.example.trekmesh.UserRole
-import com.example.trekmesh.UserRolePrefs
 import com.example.trekmesh.db.MessageEntity
 import com.example.trekmesh.db.TrekMeshDatabase
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 import com.google.android.gms.nearby.Nearby
 import com.google.android.gms.nearby.connection.AdvertisingOptions
 import com.google.android.gms.nearby.connection.ConnectionInfo
@@ -69,10 +72,14 @@ class TrekMeshService : Service() {
         private const val CLEANUP_INTERVAL_MS = 30 * 60 * 1000L
         private const val TYPE_MSG = "MSG"
         private const val TYPE_ACK = "ACK"
+        private const val TYPE_BROADCAST = "BROADCAST"
         private const val FIELD_SEP = "" // ASCII Unit Separator
 
         private const val SCAN_LOW_POWER_MS = 3 * 60 * 1000L // 3 minuti solo BT
         private const val SCAN_HIGH_POWER_MS = 45 * 1000L    // 45 secondi BT + WiFi
+        
+        private const val BREADCRUMB_INTERVAL_MS = 15 * 60 * 1000L // 15 minuti
+        private const val WEATHER_RELAY_INTERVAL_MS = 60 * 60 * 1000L // 1 ora
 
         private val BEACON_SERVICE_UUID = UUID.fromString("0000180D-0000-1000-8000-00805f9b34fb") // TrekMesh Heartbeat
     }
@@ -89,15 +96,20 @@ class TrekMeshService : Service() {
         val priority: Int,      // 1-3
         val text: String,
         val description: String = "",
-        val imagePath: String? = null
+        val imagePath: String? = null,
+        val lat: Double = 0.0,
+        val lon: Double = 0.0,
+        val alt: Double = 0.0,
+        val breadcrumbs: String = "" // Formato: lat,lon|lat,lon|...
     ) {
         fun toWireFormat(filePayloadId: Long = 0L): String {
-            val encrypted = CryptoHelper.encrypt("$text$FIELD_SEP$description")
-            return "$TYPE_MSG|$id|$sender|$ttl|$type|$priority|$filePayloadId|$encrypted"
+            val geoBlob = "$lat|$lon|$alt|$breadcrumbs"
+            val encryptedBlob = CryptoHelper.encrypt("$text$FIELD_SEP$description$FIELD_SEP$geoBlob")
+            return "$TYPE_MSG|$id|$sender|$ttl|$type|$priority|$filePayloadId|$encryptedBlob"
         }
 
         fun toEntity(status: String = "PENDING") =
-            MessageEntity(id, sender, ttl, type, priority, text, description, imagePath, status)
+            MessageEntity(id, sender, ttl, type, priority, text, description, imagePath, lat, lon, alt, status)
     }
 
     private lateinit var connectionsClient: ConnectionsClient
@@ -106,10 +118,39 @@ class TrekMeshService : Service() {
     private lateinit var db: TrekMeshDatabase
     private lateinit var imagesDir: File
     private lateinit var connectivityManager: ConnectivityManager
+    private lateinit var fusedLocationClient: FusedLocationProviderClient
     private var bluetoothManager: BluetoothManager? = null
 
+    private var currentLastLocation: Location? = null
     private var isSosActive = false
     private val seenBeaconIds = mutableMapOf<String, Long>() // id -> lastSeenTimestamp
+
+    private var safetyTimerJob: kotlinx.coroutines.Job? = null
+    private var lastBreadcrumbTime = 0L
+
+    private val locationCallback = object : LocationCallback() {
+        override fun onLocationResult(result: LocationResult) {
+            currentLastLocation = result.lastLocation
+            if (isSosActive) updateBeaconStatus(true)
+            
+            val now = System.currentTimeMillis()
+            if (now - lastBreadcrumbTime >= BREADCRUMB_INTERVAL_MS) {
+                lastBreadcrumbTime = now
+                saveBreadcrumb(result.lastLocation)
+            }
+        }
+    }
+
+    private fun saveBreadcrumb(loc: Location?) {
+        val l = loc ?: return
+        serviceScope.launch {
+            db.breadcrumbDao().insert(com.example.trekmesh.db.BreadcrumbEntity(
+                lat = l.latitude, lon = l.longitude, alt = l.altitude
+            ))
+            // Pulizia: mantieni solo le briciole delle ultime 24 ore
+            db.breadcrumbDao().pruneOld(System.currentTimeMillis() - 24 * 60 * 60 * 1000L)
+        }
+    }
 
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
@@ -244,9 +285,30 @@ class TrekMeshService : Service() {
             Log.w(LOG_TAG, "Decifratura fallita per $msgId")
             return
         }
-        val sepIdx = decrypted.indexOf(FIELD_SEP)
-        val text = if (sepIdx >= 0) decrypted.substring(0, sepIdx) else decrypted
-        val description = if (sepIdx >= 0) decrypted.substring(sepIdx + 1) else ""
+        
+        val segments = decrypted.split(FIELD_SEP)
+        if (segments.size < 2) return
+        
+        val text = segments[0]
+        val description = segments[1]
+        
+        var lat = 0.0
+        var lon = 0.0
+        var alt = 0.0
+        
+        if (segments.size >= 3) {
+            val geoParts = segments[2].split("|")
+            if (geoParts.size >= 3) {
+                lat = geoParts[0].toDoubleOrNull() ?: 0.0
+                lon = geoParts[1].toDoubleOrNull() ?: 0.0
+                alt = geoParts[2].toDoubleOrNull() ?: 0.0
+            }
+            // I breadcrumbs sono nel 4° elemento del geoBlob se presenti
+            val crumbs = if (geoParts.size >= 4) geoParts[3] else ""
+            if (crumbs.isNotEmpty()) {
+                TrekMeshBus.emitLog("Ricevuta traccia storica (Breadcrumbs) da $sender")
+            }
+        }
 
         if (!seenMessageIds.add(msgId)) {
             Log.d(LOG_TAG, "Messaggio duplicato ignorato: $msgId")
@@ -256,12 +318,21 @@ class TrekMeshService : Service() {
         if (filePayloadId != 0L) pendingFileForMessage[filePayloadId] = msgId
 
         val receivedTtl = ttl - 1
-        TrekMeshBus.emitMessage(msgId, sender, type, priority, text, description, null, isOwn = false, ttl = receivedTtl)
+        TrekMeshBus.emitMessage(msgId, sender, type, priority, text, description, null, lat, lon, alt, isOwn = false, ttl = receivedTtl)
         serviceScope.launch {
-            db.messageDao().insert(MessageEntity(msgId, sender, receivedTtl, type, priority, text, description, null, "RECEIVED"))
+            db.messageDao().insert(MessageEntity(msgId, sender, receivedTtl, type, priority, text, description, null, lat, lon, alt, "RECEIVED"))
         }
         sendAck(endpointId, msgId)
-        showMessageNotification(sender, type, priority, text)
+        
+        val distanceStr = currentLastLocation?.let { loc ->
+            if (lat != 0.0) {
+                val results = FloatArray(1)
+                Location.distanceBetween(loc.latitude, loc.longitude, lat, lon, results)
+                " (a %.0fm)".format(results[0])
+            } else ""
+        } ?: ""
+        
+        showMessageNotification(sender, type, priority, text + distanceStr)
 
         if (type == "SOS" && priority >= 3 && UserRolePrefs.getRole(this) == UserRole.RIFUGIO) {
             serviceScope.launch {
@@ -282,7 +353,7 @@ class TrekMeshService : Service() {
         }
 
         if (ttl > 1) {
-            val forward = MeshMessage(msgId, sender, ttl - 1, type, priority, text, description)
+            val forward = MeshMessage(msgId, sender, ttl - 1, type, priority, text, description, null, lat, lon, alt)
             serviceScope.launch { persistMessage(forward, "RECEIVED") }
             forwardToAllExcept(forward, excludeEndpointId = endpointId)
         }
@@ -312,7 +383,10 @@ class TrekMeshService : Service() {
         imagesDir = File(filesDir, "images").also { it.mkdirs() }
         connectivityManager = getSystemService(ConnectivityManager::class.java)
         bluetoothManager = getSystemService(BluetoothManager::class.java)
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         
+        startLocationUpdates()
+
         val request = NetworkRequest.Builder()
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             .build()
@@ -329,6 +403,9 @@ class TrekMeshService : Service() {
                     text = e.text,
                     description = e.description,
                     imagePath = e.imagePath,
+                    lat = e.lat,
+                    lon = e.lon,
+                    alt = e.alt,
                     isOwn = e.status != "RECEIVED",
                     ttl = e.ttl,
                     timestamp = e.timestamp
@@ -339,8 +416,81 @@ class TrekMeshService : Service() {
             }
         }
         listenForOutgoingMessages()
+        listenForSafetyActions()
         startPeriodicCleanup()
         startBleBeaconing()
+        
+        if (UserRolePrefs.getRole(this) == UserRole.RIFUGIO) {
+            startWeatherRelay()
+        }
+    }
+
+    private fun startWeatherRelay() {
+        serviceScope.launch {
+            while (isActive) {
+                val weather = WeatherRelay.fetchWeather()
+                if (weather != null) {
+                    TrekMeshBus.sendMessage(OutgoingMessage(
+                        type = TYPE_BROADCAST,
+                        priority = 2,
+                        text = weather,
+                        description = "Aggiornamento automatico Rifugio"
+                    ))
+                }
+                delay(WEATHER_RELAY_INTERVAL_MS)
+            }
+        }
+    }
+
+    private fun listenForSafetyActions() {
+        serviceScope.launch {
+            TrekMeshBus.safetyActions.collect { action ->
+                when (action) {
+                    SafetyTimerAction.START_30M -> startSafetyTimer(30 * 60)
+                    SafetyTimerAction.START_1H  -> startSafetyTimer(60 * 60)
+                    SafetyTimerAction.START_2H  -> startSafetyTimer(120 * 60)
+                    SafetyTimerAction.STOP      -> stopSafetyTimer()
+                }
+            }
+        }
+    }
+
+    private fun startSafetyTimer(seconds: Int) {
+        safetyTimerJob?.cancel()
+        safetyTimerJob = serviceScope.launch {
+            var remaining = seconds
+            while (remaining > 0) {
+                TrekMeshBus.updateSafetyTimer(remaining)
+                delay(1000)
+                remaining--
+            }
+            TrekMeshBus.updateSafetyTimer(0)
+            triggerSafetyAlarm()
+        }
+        TrekMeshBus.emitLog("Timer di sicurezza avviato: ${seconds / 60} minuti")
+    }
+
+    private fun stopSafetyTimer() {
+        safetyTimerJob?.cancel()
+        TrekMeshBus.updateSafetyTimer(0)
+        TrekMeshBus.emitLog("Timer di sicurezza interrotto ✓")
+    }
+
+    private fun triggerSafetyAlarm() {
+        TrekMeshBus.emitLog("⚠️ ALLARME: Check-in mancato! Invio SOS automatico...")
+        TrekMeshBus.sendMessage(OutgoingMessage(
+            type = "SOS",
+            priority = 3,
+            text = "SOS AUTOMATICO: Mancato check-in programmato"
+        ))
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun startLocationUpdates() {
+        val request = LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 30_000)
+            .setMinUpdateIntervalMillis(10_000)
+            .build()
+        fusedLocationClient.requestLocationUpdates(request, locationCallback, Looper.getMainLooper())
     }
 
     @SuppressLint("MissingPermission")
@@ -358,13 +508,16 @@ class TrekMeshService : Service() {
             .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM)
             .build()
 
-        // Costruiamo il pacchetto: Primi 4 byte sono un hash dell'endpoint name, il 5° byte è lo stato (0=INFO, 1=SOS)
         val shortId = localEndpointName.hashCode()
         val statusByte: Byte = if (isSosActive) 1 else 0
+        val lat = currentLastLocation?.latitude?.toFloat() ?: 0.0f
+        val lon = currentLastLocation?.longitude?.toFloat() ?: 0.0f
         
-        val manufacturerData = ByteBuffer.allocate(5)
+        val manufacturerData = ByteBuffer.allocate(13)
             .putInt(shortId)
             .put(statusByte)
+            .putFloat(lat)
+            .putFloat(lon)
             .array()
 
         val data = AdvertiseData.Builder()
@@ -381,7 +534,6 @@ class TrekMeshService : Service() {
             }
         })
 
-        // Avviamo anche lo scan per ricevere beacon
         startBleScanner()
     }
 
@@ -406,17 +558,31 @@ class TrekMeshService : Service() {
                 val remoteIdHash = buffer.int
                 val remoteStatus = buffer.get().toInt()
                 
+                var remoteLat = 0.0f
+                var remoteLon = 0.0f
+                if (data.size >= 13) {
+                    remoteLat = buffer.float
+                    remoteLon = buffer.float
+                }
+                
                 val key = remoteIdHash.toString()
                 val now = System.currentTimeMillis()
                 
-                // Se è un SOS, logghiamo sempre se è nuovo o passato un minuto
                 if (remoteStatus == 1) {
                     val lastSeen = seenBeaconIds[key] ?: 0L
                     if (now - lastSeen > 60_000) {
                         seenBeaconIds[key] = now
-                        TrekMeshBus.emitLog("🚨 Rilevato segnale SOS passivo nelle vicinanze!")
+                        val distMsg = if (remoteLat != 0.0f) {
+                            val results = FloatArray(1)
+                            currentLastLocation?.let { loc ->
+                                Location.distanceBetween(loc.latitude, loc.longitude, remoteLat.toDouble(), remoteLon.toDouble(), results)
+                                " a circa %.0fm".format(results[0])
+                            } ?: ""
+                        } else ""
+                        
+                        TrekMeshBus.emitLog("🚨 SOS passivo captato$distMsg!")
                         if (UserRolePrefs.getRole(this@TrekMeshService) == UserRole.RIFUGIO) {
-                            TrekMeshBus.emitLog("Rifugio: Segnale SOS Beacon captato, allerta pronta.")
+                            TrekMeshBus.emitLog("Rifugio: Beacon SOS rilevato, allerta pronta.")
                         }
                     }
                 }
@@ -426,7 +592,6 @@ class TrekMeshService : Service() {
 
     @SuppressLint("MissingPermission")
     private fun updateBeaconStatus(sos: Boolean) {
-        if (isSosActive == sos) return
         isSosActive = sos
         bluetoothManager?.adapter?.bluetoothLeAdvertiser?.stopAdvertising(object : AdvertiseCallback() {})
         startBleBeaconing()
@@ -448,21 +613,37 @@ class TrekMeshService : Service() {
     private fun listenForOutgoingMessages() {
         serviceScope.launch {
             TrekMeshBus.outgoing.collect { outgoing ->
+                val lat = currentLastLocation?.latitude ?: 0.0
+                val lon = currentLastLocation?.longitude ?: 0.0
+                val alt = currentLastLocation?.altitude ?: 0.0
+                
+                // TTL dinamico: i BROADCAST viaggiano più lontano (15 salti)
+                val ttl = if (outgoing.type == TYPE_BROADCAST) 15 else INITIAL_TTL
+                
+                // Se è un SOS, carichiamo i breadcrumbs dal DB
+                val crumbs = if (outgoing.type == "SOS") {
+                    db.breadcrumbDao().getLast(5).joinToString("|") { "${it.lat},${it.lon}" }
+                } else ""
+
                 val msg = MeshMessage(
                     id = outgoing.id,
                     sender = localEndpointName,
-                    ttl = INITIAL_TTL,
+                    ttl = ttl,
                     type = outgoing.type,
                     priority = outgoing.priority,
                     text = outgoing.text,
                     description = outgoing.description,
-                    imagePath = outgoing.imagePath
+                    imagePath = outgoing.imagePath,
+                    lat = lat,
+                    lon = lon,
+                    alt = alt,
+                    breadcrumbs = crumbs
                 )
                 seenMessageIds.add(msg.id)
                 ownMessageIds.add(msg.id)
                 persistMessage(msg, "PENDING")
                 TrekMeshBus.emitMessage(msg.id, localEndpointName, msg.type, msg.priority,
-                    msg.text, msg.description, msg.imagePath, isOwn = true)
+                    msg.text, msg.description, msg.imagePath, lat, lon, alt, isOwn = true)
 
                 if (msg.type == "SOS" && msg.priority >= 3) {
                     forceHighPowerScan()
@@ -497,18 +678,25 @@ class TrekMeshService : Service() {
         val (filePayload, filePayloadId) = buildFilePayload(msg.imagePath)
         val wire = msg.toWireFormat(filePayloadId)
         val bytesPayload = Payload.fromBytes(wire.toByteArray(Charsets.UTF_8))
+        
         connectedEndpoints.forEach { endpointId ->
+            // Invia immediatamente
             connectionsClient.sendPayload(endpointId, bytesPayload)
             filePayload?.let { connectionsClient.sendPayload(endpointId, it) }
         }
+        
+        // Se è un messaggio a bassa priorità (BROADCAST) e abbiamo molti endpoint, 
+        // potremmo batchare, ma per ora la priorità è gestita dal DAO nel flush.
     }
 
     private fun forwardToAllExcept(msg: MeshMessage, excludeEndpointId: String) {
         val targets = connectedEndpoints - excludeEndpointId
         if (targets.isEmpty()) return
+        
         val (filePayload, filePayloadId) = buildFilePayload(msg.imagePath)
         val wire = msg.toWireFormat(filePayloadId)
         val bytesPayload = Payload.fromBytes(wire.toByteArray(Charsets.UTF_8))
+        
         targets.forEach { endpointId ->
             connectionsClient.sendPayload(endpointId, bytesPayload)
             filePayload?.let { connectionsClient.sendPayload(endpointId, it) }
@@ -516,22 +704,40 @@ class TrekMeshService : Service() {
     }
 
     private suspend fun flushBufferTo(endpointId: String) {
-        val buffered = db.messageDao().getAll() // already sorted by effective priority DESC
+        val buffered = db.messageDao().getAll() // Ora ordinati con SOS > INFO > BROADCAST
         if (buffered.isEmpty()) return
-        TrekMeshBus.emitLog("Invio ${buffered.size} messaggi bufferizzati a ${endpointNames[endpointId] ?: endpointId}...")
-        buffered.forEach { entity ->
+        
+        val name = endpointNames[endpointId] ?: endpointId
+        TrekMeshBus.emitLog("Sincronizzazione mesh con $name: invio ${buffered.size} messaggi (priorità SOS prima)...")
+        
+        // Separiamo i tipi per sicurezza ulteriore nell'invio sequenziale
+        val sosMessages = buffered.filter { it.type == "SOS" }
+        val otherMessages = buffered.filter { it.type != "SOS" }
+
+        // Invia prima tutti gli SOS
+        sosMessages.forEach { entity ->
             if (entity.ttl <= 0) return@forEach
-            val (filePayload, filePayloadId) = buildFilePayload(entity.imagePath)
-            val msg = MeshMessage(entity.id, entity.sender, entity.ttl, entity.type,
-                entity.priority, entity.text, entity.description, entity.imagePath)
-            val wire = msg.toWireFormat(filePayloadId)
-            connectionsClient.sendPayload(endpointId, Payload.fromBytes(wire.toByteArray(Charsets.UTF_8)))
-            filePayload?.let { connectionsClient.sendPayload(endpointId, it) }
+            sendEntityToEndpoint(entity, endpointId)
         }
+        
+        // Poi il resto (INFO e BROADCAST)
+        otherMessages.forEach { entity ->
+            if (entity.ttl <= 0) return@forEach
+            sendEntityToEndpoint(entity, endpointId)
+        }
+        
         db.messageDao().deleteExpired()
     }
 
-    // Returns (filePayload, filePayloadId) — both null/0 if no image or file missing
+    private fun sendEntityToEndpoint(entity: MessageEntity, endpointId: String) {
+        val (filePayload, filePayloadId) = buildFilePayload(entity.imagePath)
+        val msg = MeshMessage(entity.id, entity.sender, entity.ttl, entity.type,
+            entity.priority, entity.text, entity.description, entity.imagePath, entity.lat, entity.lon, entity.alt)
+        val wire = msg.toWireFormat(filePayloadId)
+        connectionsClient.sendPayload(endpointId, Payload.fromBytes(wire.toByteArray(Charsets.UTF_8)))
+        filePayload?.let { connectionsClient.sendPayload(endpointId, it) }
+    }
+
     private fun buildFilePayload(imagePath: String?): Pair<Payload?, Long> {
         val file = imagePath?.let { File(it) }?.takeIf { it.exists() } ?: return Pair(null, 0L)
         return try {
@@ -564,22 +770,19 @@ class TrekMeshService : Service() {
         adaptiveScanJob?.cancel()
         adaptiveScanJob = serviceScope.launch {
             while (isActive) {
-                // Se siamo già connessi a qualcuno, restiamo in Low Power per risparmiare
                 if (connectedEndpoints.isNotEmpty()) {
                     if (currentScanMode != ScanMode.LOW_POWER) {
                         currentScanMode = ScanMode.LOW_POWER
                         startNetworking(highPower = false)
                     }
-                    delay(30000) // Ricontrolla ogni 30s
+                    delay(30000)
                     continue
                 }
 
-                // Modalità Low Power (Solo Bluetooth)
                 currentScanMode = ScanMode.LOW_POWER
                 startNetworking(highPower = false)
                 delay(SCAN_LOW_POWER_MS)
 
-                // Se ancora nessuno è connesso, passiamo a High Power (WiFi Direct)
                 if (connectedEndpoints.isEmpty()) {
                     TrekMeshBus.emitLog("Nessun dispositivo trovato, attivo WiFi Direct per scansione profonda...")
                     currentScanMode = ScanMode.HIGH_POWER
@@ -595,7 +798,6 @@ class TrekMeshService : Service() {
         adaptiveScanJob?.cancel()
         currentScanMode = ScanMode.HIGH_POWER
         startNetworking(highPower = true)
-        // Riprendi il ciclo adattivo dopo un po'
         serviceScope.launch {
             delay(SCAN_HIGH_POWER_MS * 2) 
             startAdaptiveScanning()
@@ -610,7 +812,7 @@ class TrekMeshService : Service() {
         
         val advertisingOptions = AdvertisingOptions.Builder()
             .setStrategy(strategy)
-            .setLowPower(!highPower) // Se non è high power, usa modalità a basso consumo
+            .setLowPower(!highPower)
             .build()
 
         val discoveryOptions = DiscoveryOptions.Builder()
@@ -688,6 +890,7 @@ class TrekMeshService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         connectivityManager.unregisterNetworkCallback(networkCallback)
+        fusedLocationClient.removeLocationUpdates(locationCallback)
         adaptiveScanJob?.cancel()
         serviceScope.cancel()
         connectionsClient.stopAdvertising()

@@ -11,11 +11,19 @@ interface MessageDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(message: MessageEntity)
 
-    // Restituisce i messaggi ordinati per priorità effettiva decrescente, poi per timestamp
+    // Restituisce i messaggi ordinati per importanza:
+    // 1. SOS (più prioritari)
+    // 2. INFO (messaggi diretti)
+    // 3. BROADCAST (informazioni generali meteo/sentieri)
     @Query("""
         SELECT * FROM messages
         ORDER BY
-            CASE type WHEN 'SOS' THEN priority + 3 ELSE priority END DESC,
+            CASE type 
+                WHEN 'SOS' THEN priority + 10
+                WHEN 'INFO' THEN priority + 5
+                WHEN 'BROADCAST' THEN priority
+                ELSE 0 
+            END DESC,
             timestamp ASC
     """)
     suspend fun getAll(): List<MessageEntity>
