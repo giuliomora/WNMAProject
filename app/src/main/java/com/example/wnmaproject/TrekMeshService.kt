@@ -1,9 +1,18 @@
-package com.example.trekmesh
+package com.example.wnmaproject
 
+import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.bluetooth.BluetoothManager
+import android.bluetooth.le.AdvertiseCallback
+import android.bluetooth.le.AdvertiseData
+import android.bluetooth.le.AdvertiseSettings
+import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanFilter
+import android.bluetooth.le.ScanResult
+import android.bluetooth.le.ScanSettings
 import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.Network
@@ -12,8 +21,14 @@ import android.net.NetworkRequest
 import android.os.Build
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
+import android.os.ParcelUuid
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.example.trekmesh.CryptoHelper
+import com.example.trekmesh.ProtezioneCivileRelay
+import com.example.trekmesh.TrekMeshBus
+import com.example.trekmesh.UserRole
+import com.example.trekmesh.UserRolePrefs
 import com.example.trekmesh.db.MessageEntity
 import com.example.trekmesh.db.TrekMeshDatabase
 import com.google.android.gms.nearby.Nearby
@@ -30,7 +45,9 @@ import com.google.android.gms.nearby.connection.PayloadCallback
 import com.google.android.gms.nearby.connection.PayloadTransferUpdate
 import com.google.android.gms.nearby.connection.Strategy
 import java.io.File
+import java.nio.ByteBuffer
 import java.security.SecureRandom
+import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -56,6 +73,8 @@ class TrekMeshService : Service() {
 
         private const val SCAN_LOW_POWER_MS = 3 * 60 * 1000L // 3 minuti solo BT
         private const val SCAN_HIGH_POWER_MS = 45 * 1000L    // 45 secondi BT + WiFi
+
+        private val BEACON_SERVICE_UUID = UUID.fromString("0000180D-0000-1000-8000-00805f9b34fb") // TrekMesh Heartbeat
     }
 
     private enum class ScanMode { LOW_POWER, HIGH_POWER }
@@ -87,6 +106,10 @@ class TrekMeshService : Service() {
     private lateinit var db: TrekMeshDatabase
     private lateinit var imagesDir: File
     private lateinit var connectivityManager: ConnectivityManager
+    private var bluetoothManager: BluetoothManager? = null
+
+    private var isSosActive = false
+    private val seenBeaconIds = mutableMapOf<String, Long>() // id -> lastSeenTimestamp
 
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
@@ -288,6 +311,8 @@ class TrekMeshService : Service() {
         db = TrekMeshDatabase.getInstance(this)
         imagesDir = File(filesDir, "images").also { it.mkdirs() }
         connectivityManager = getSystemService(ConnectivityManager::class.java)
+        bluetoothManager = getSystemService(BluetoothManager::class.java)
+        
         val request = NetworkRequest.Builder()
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             .build()
@@ -315,6 +340,96 @@ class TrekMeshService : Service() {
         }
         listenForOutgoingMessages()
         startPeriodicCleanup()
+        startBleBeaconing()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun startBleBeaconing() {
+        val advertiser = bluetoothManager?.adapter?.bluetoothLeAdvertiser
+        if (advertiser == null) {
+            Log.w(LOG_TAG, "BLE Advertiser non disponibile")
+            return
+        }
+
+        val settings = AdvertiseSettings.Builder()
+            .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_BALANCED)
+            .setConnectable(false)
+            .setTimeout(0)
+            .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM)
+            .build()
+
+        // Costruiamo il pacchetto: Primi 4 byte sono un hash dell'endpoint name, il 5° byte è lo stato (0=INFO, 1=SOS)
+        val shortId = localEndpointName.hashCode()
+        val statusByte: Byte = if (isSosActive) 1 else 0
+        
+        val manufacturerData = ByteBuffer.allocate(5)
+            .putInt(shortId)
+            .put(statusByte)
+            .array()
+
+        val data = AdvertiseData.Builder()
+            .addServiceUuid(ParcelUuid(BEACON_SERVICE_UUID))
+            .addManufacturerData(0xFFFF, manufacturerData)
+            .build()
+
+        advertiser.startAdvertising(settings, data, object : AdvertiseCallback() {
+            override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) {
+                Log.d(LOG_TAG, "Beaconing BLE avviato (SOS=$isSosActive)")
+            }
+            override fun onStartFailure(errorCode: Int) {
+                Log.e(LOG_TAG, "Errore avvio Beaconing: $errorCode")
+            }
+        })
+
+        // Avviamo anche lo scan per ricevere beacon
+        startBleScanner()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun startBleScanner() {
+        val scanner = bluetoothManager?.adapter?.bluetoothLeScanner ?: return
+        
+        val filter = ScanFilter.Builder()
+            .setServiceUuid(ParcelUuid(BEACON_SERVICE_UUID))
+            .build()
+            
+        val settings = ScanSettings.Builder()
+            .setScanMode(ScanSettings.SCAN_MODE_LOW_POWER)
+            .build()
+            
+        scanner.startScan(listOf<ScanFilter>(filter), settings, object : ScanCallback() {
+            override fun onScanResult(callbackType: Int, result: ScanResult) {
+                val data = result.scanRecord?.getManufacturerSpecificData(0xFFFF) ?: return
+                if (data.size < 5) return
+                
+                val buffer = ByteBuffer.wrap(data)
+                val remoteIdHash = buffer.int
+                val remoteStatus = buffer.get().toInt()
+                
+                val key = remoteIdHash.toString()
+                val now = System.currentTimeMillis()
+                
+                // Se è un SOS, logghiamo sempre se è nuovo o passato un minuto
+                if (remoteStatus == 1) {
+                    val lastSeen = seenBeaconIds[key] ?: 0L
+                    if (now - lastSeen > 60_000) {
+                        seenBeaconIds[key] = now
+                        TrekMeshBus.emitLog("🚨 Rilevato segnale SOS passivo nelle vicinanze!")
+                        if (UserRolePrefs.getRole(this@TrekMeshService) == UserRole.RIFUGIO) {
+                            TrekMeshBus.emitLog("Rifugio: Segnale SOS Beacon captato, allerta pronta.")
+                        }
+                    }
+                }
+            }
+        })
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun updateBeaconStatus(sos: Boolean) {
+        if (isSosActive == sos) return
+        isSosActive = sos
+        bluetoothManager?.adapter?.bluetoothLeAdvertiser?.stopAdvertising(object : AdvertiseCallback() {})
+        startBleBeaconing()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -351,6 +466,7 @@ class TrekMeshService : Service() {
 
                 if (msg.type == "SOS" && msg.priority >= 3) {
                     forceHighPowerScan()
+                    updateBeaconStatus(true)
                     serviceScope.launch {
                         val relayed = ProtezioneCivileRelay.sendAlert(
                             messageId = msg.id,
