@@ -27,6 +27,18 @@
     </LinearLayout>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_settings"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|start"
+        android:layout_marginStart="16dp"
+        android:layout_marginBottom="88dp"
+        android:contentDescription="Impostazioni"
+        app:srcCompat="@android:drawable/ic_menu_preferences"
+        app:backgroundTint="#37474F"
+        app:fabSize="mini" />
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_debug_reset"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
