@@ -53,7 +53,14 @@ class TrekMeshService : Service() {
         private const val TYPE_MSG = "MSG"
         private const val TYPE_ACK = "ACK"
         private const val FIELD_SEP = "" // ASCII Unit Separator
+
+        private const val SCAN_LOW_POWER_MS = 3 * 60 * 1000L // 3 minuti solo BT
+        private const val SCAN_HIGH_POWER_MS = 45 * 1000L    // 45 secondi BT + WiFi
     }
+
+    private enum class ScanMode { LOW_POWER, HIGH_POWER }
+    private var currentScanMode = ScanMode.LOW_POWER
+    private var adaptiveScanJob: kotlinx.coroutines.Job? = null
 
     private data class MeshMessage(
         val id: String,
@@ -319,7 +326,7 @@ class TrekMeshService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
-        startNetworking()
+        startAdaptiveScanning()
         return START_STICKY
     }
 
@@ -343,6 +350,7 @@ class TrekMeshService : Service() {
                     msg.text, msg.description, msg.imagePath, isOwn = true)
 
                 if (msg.type == "SOS" && msg.priority >= 3) {
+                    forceHighPowerScan()
                     serviceScope.launch {
                         val relayed = ProtezioneCivileRelay.sendAlert(
                             messageId = msg.id,
@@ -436,17 +444,74 @@ class TrekMeshService : Service() {
         }
     }
 
-    private fun startNetworking() {
-        val advertisingOptions = AdvertisingOptions.Builder().setStrategy(Strategy.P2P_CLUSTER).build()
-        val discoveryOptions = DiscoveryOptions.Builder().setStrategy(Strategy.P2P_CLUSTER).build()
+    private fun startAdaptiveScanning() {
+        adaptiveScanJob?.cancel()
+        adaptiveScanJob = serviceScope.launch {
+            while (isActive) {
+                // Se siamo già connessi a qualcuno, restiamo in Low Power per risparmiare
+                if (connectedEndpoints.isNotEmpty()) {
+                    if (currentScanMode != ScanMode.LOW_POWER) {
+                        currentScanMode = ScanMode.LOW_POWER
+                        startNetworking(highPower = false)
+                    }
+                    delay(30000) // Ricontrolla ogni 30s
+                    continue
+                }
+
+                // Modalità Low Power (Solo Bluetooth)
+                currentScanMode = ScanMode.LOW_POWER
+                startNetworking(highPower = false)
+                delay(SCAN_LOW_POWER_MS)
+
+                // Se ancora nessuno è connesso, passiamo a High Power (WiFi Direct)
+                if (connectedEndpoints.isEmpty()) {
+                    TrekMeshBus.emitLog("Nessun dispositivo trovato, attivo WiFi Direct per scansione profonda...")
+                    currentScanMode = ScanMode.HIGH_POWER
+                    startNetworking(highPower = true)
+                    delay(SCAN_HIGH_POWER_MS)
+                }
+            }
+        }
+    }
+
+    private fun forceHighPowerScan() {
+        TrekMeshBus.emitLog("Priorità SOS: Attivazione WiFi Direct per massimizzare raggio...")
+        adaptiveScanJob?.cancel()
+        currentScanMode = ScanMode.HIGH_POWER
+        startNetworking(highPower = true)
+        // Riprendi il ciclo adattivo dopo un po'
+        serviceScope.launch {
+            delay(SCAN_HIGH_POWER_MS * 2) 
+            startAdaptiveScanning()
+        }
+    }
+
+    private fun startNetworking(highPower: Boolean) {
+        connectionsClient.stopAdvertising()
+        connectionsClient.stopDiscovery()
+
+        val strategy = Strategy.P2P_CLUSTER
+        
+        val advertisingOptions = AdvertisingOptions.Builder()
+            .setStrategy(strategy)
+            .setLowPower(!highPower) // Se non è high power, usa modalità a basso consumo
+            .build()
+
+        val discoveryOptions = DiscoveryOptions.Builder()
+            .setStrategy(strategy)
+            .setLowPower(!highPower)
+            .build()
 
         connectionsClient.startAdvertising(localEndpointName, serviceId,
             connectionLifecycleCallback, advertisingOptions)
-            .addOnSuccessListener { TrekMeshBus.emitLog("[$localEndpointName] In ascolto di altri dispositivi...") }
+            .addOnSuccessListener { 
+                val mode = if (highPower) "ALTA POTENZA (WiFi)" else "BASSO CONSUMO (BT)"
+                TrekMeshBus.emitLog("[$localEndpointName] In ascolto modalità $mode...")
+            }
             .addOnFailureListener { e -> TrekMeshBus.emitLog("Errore advertising: ${e.message}") }
 
         connectionsClient.startDiscovery(serviceId, endpointDiscoveryCallback, discoveryOptions)
-            .addOnSuccessListener { TrekMeshBus.emitLog("Scansione dispositivi vicini avviata...") }
+            .addOnSuccessListener { TrekMeshBus.emitLog("Scansione avviata...") }
             .addOnFailureListener { e -> TrekMeshBus.emitLog("Errore discovery: ${e.message}") }
     }
 
@@ -507,6 +572,7 @@ class TrekMeshService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         connectivityManager.unregisterNetworkCallback(networkCallback)
+        adaptiveScanJob?.cancel()
         serviceScope.cancel()
         connectionsClient.stopAdvertising()
         connectionsClient.stopDiscovery()
