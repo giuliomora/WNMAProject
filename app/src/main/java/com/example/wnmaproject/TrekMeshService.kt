@@ -846,6 +846,14 @@ class TrekMeshService : Service() {
 
     private fun showMessageNotification(sender: String, type: String, priority: Int, text: String) {
         val isSos = type == "SOS"
+        val filter = NotificationPrefs.getFilter(this)
+        val shouldShow = when (filter) {
+            NotificationFilter.ALL       -> true
+            NotificationFilter.SOS_ONLY  -> isSos
+            NotificationFilter.INFO_ONLY -> !isSos
+            NotificationFilter.DISABLED  -> false
+        }
+        if (!shouldShow) return
         val title = if (isSos) "🆘 SOS da $sender (priorità $priority)" else "📩 Messaggio da $sender"
         val nm = getSystemService(NotificationManager::class.java) ?: return
         val notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ALERT_ID)
