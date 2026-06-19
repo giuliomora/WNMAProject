@@ -34,6 +34,7 @@ Messages propagate through the network based on a **Time To Live (TTL)** system:
 *   **Standard Messages:** 7 hops (can cover several kilometers in a populated trail).
 *   **Area Broadcasts:** 15 hops (designed to cover wide valleys from a high-altitude gateway).
 *   **Deduplication:** A persistent cache ensures nodes never process or forward the same message twice, preventing "broadcast storms."
+*   **Visual TTL Indicator:** Each received message card shows remaining hops with a color-coded badge (green ≥5, orange 2–4, red ≤1). Messages with TTL=0 are automatically hidden from the inbox after 30 minutes.
 
 ### 🚦 Intelligent Quality of Service (QoS)
 The network implements a tiered priority system in the transmission buffer:
@@ -51,6 +52,21 @@ Nodes can assume two distinct roles to optimize network utility:
     *   **Cloud SOS Relay:** Automatically forwards mesh-received SOS messages to **Civil Protection** via HTTP API.
     *   **Auto-Weather Injection:** Fetches weather updates via internet (when available) and broadcasts them into the mesh every hour.
     *   **Trail Alerts:** Rifugios can send area-wide alerts (e.g., *"Trail 101 closed due to landslide"*) that propagate up to 15 hops.
+
+---
+
+## 📱 User Interface
+
+### 🔔 Tap-to-Detail Notifications
+Incoming message notifications open directly into a full **Message Detail Screen**, displaying:
+- Type/priority badge and delivery status
+- Full message text and optional description
+- Sender, timestamp, TTL residuo
+- Embedded image (if present)
+- GPS coordinates with a one-tap **"Open in Maps"** button (any `geo:` compatible app)
+
+### 📶 Live Mesh Status Bar
+A status bar above the message tabs shows the current number of connected peers in real time — grey when isolated, green when nodes are reachable.
 
 ---
 
