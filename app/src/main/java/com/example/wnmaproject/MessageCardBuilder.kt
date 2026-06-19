@@ -1,6 +1,7 @@
 package com.example.trekmesh
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.BitmapFactory
 import android.graphics.Typeface
 import android.view.Gravity
@@ -12,6 +13,24 @@ import android.widget.TextView
 private const val INITIAL_TTL = 7
 
 fun buildMessageCard(context: Context, msg: ChatMessage): View {
+    // Click apre il dettaglio
+    fun openDetail() {
+        context.startActivity(Intent(context, MessageDetailActivity::class.java).apply {
+            putExtra(MessageDetailActivity.EXTRA_ID,        msg.id)
+            putExtra(MessageDetailActivity.EXTRA_SENDER,    msg.label)
+            putExtra(MessageDetailActivity.EXTRA_TYPE,      msg.type)
+            putExtra(MessageDetailActivity.EXTRA_PRIORITY,  msg.priority)
+            putExtra(MessageDetailActivity.EXTRA_TEXT,      msg.text)
+            putExtra(MessageDetailActivity.EXTRA_DESC,      msg.description)
+            putExtra(MessageDetailActivity.EXTRA_IMAGE,     msg.imagePath)
+            putExtra(MessageDetailActivity.EXTRA_STATUS,    msg.status)
+            putExtra(MessageDetailActivity.EXTRA_TTL,       msg.ttl)
+            putExtra(MessageDetailActivity.EXTRA_TIMESTAMP, msg.timestamp)
+            putExtra(MessageDetailActivity.EXTRA_LAT,       msg.lat)
+            putExtra(MessageDetailActivity.EXTRA_LON,       msg.lon)
+            putExtra(MessageDetailActivity.EXTRA_ALT,       msg.alt)
+        })
+    }
     val isOwn  = msg.label == "Tu"
     val isSos  = msg.type == "SOS"
     val isBroadcast = msg.type == "BROADCAST"
@@ -23,13 +42,18 @@ fun buildMessageCard(context: Context, msg: ChatMessage): View {
         setBackgroundColor(when {
             isNearby    -> 0x44F44336.toInt()
             isSos       -> 0x22F44336.toInt()
-            isBroadcast -> 0x22FF9800.toInt() // Arancione per broadcast
+            isBroadcast -> 0x22FF9800.toInt()
             else        -> 0x11FFFFFF.toInt()
         })
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { setMargins(0, 4, 0, 4) }
+        isClickable = true
+        isFocusable = true
+        foreground = context.obtainStyledAttributes(intArrayOf(android.R.attr.selectableItemBackground))
+            .getDrawable(0)
+        setOnClickListener { openDetail() }
     }
 
     // Header
@@ -111,6 +135,26 @@ fun buildMessageCard(context: Context, msg: ChatMessage): View {
                 ).apply { topMargin = 8 }
             })
         }
+    }
+
+    // Footer: TTL residuo per messaggi ricevuti
+    if (!isOwn) {
+        val ttlColor = when {
+            msg.ttl >= 5 -> 0xFF4CAF50.toInt()  // verde
+            msg.ttl >= 2 -> 0xFFFF9800.toInt()  // arancione
+            else         -> 0xFFF44336.toInt()  // rosso
+        }
+        val ttlLabel = when {
+            msg.ttl <= 0 -> "scaduto"
+            msg.ttl == 1 -> "1 salto"
+            else         -> "${msg.ttl} salti"
+        }
+        card.addView(TextView(context).apply {
+            text = "↔ $ttlLabel"
+            textSize = 10f
+            setTextColor(ttlColor)
+            setPadding(0, 6, 0, 0)
+        })
     }
 
     return card

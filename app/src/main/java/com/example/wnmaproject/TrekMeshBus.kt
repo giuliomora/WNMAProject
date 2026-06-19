@@ -89,6 +89,13 @@ object TrekMeshBus {
         }
     }
 
+    private val _peerCount = MutableStateFlow(0)
+    val peerCount = _peerCount.asStateFlow()
+
+    fun updatePeerCount(count: Int) {
+        _peerCount.value = count
+    }
+
     fun updateSafetyTimer(seconds: Int) {
         _safetyTimer.value = seconds
     }

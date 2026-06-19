@@ -25,6 +25,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         
         setupSafetyTimerUI()
+        setupMeshStatusUI()
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -78,6 +79,21 @@ class MainActivity : AppCompatActivity() {
                     }
                     .setNegativeButton("Annulla", null)
                     .show()
+            }
+        }
+    }
+
+    private fun setupMeshStatusUI() {
+        val tv = findViewById<TextView>(R.id.tv_mesh_status)
+        lifecycleScope.launch {
+            TrekMeshBus.peerCount.collect { count ->
+                if (count == 0) {
+                    tv.text = "● Mesh: nessun nodo"
+                    tv.setTextColor(0xFF888888.toInt())
+                } else {
+                    tv.text = "● Mesh: $count nodo${if (count > 1) "i" else ""} connesso${if (count > 1) "i" else ""}"
+                    tv.setTextColor(0xFF4CAF50.toInt())
+                }
             }
         }
     }

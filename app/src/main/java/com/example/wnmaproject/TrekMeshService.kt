@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.bluetooth.BluetoothManager
 import android.bluetooth.le.AdvertiseCallback
@@ -195,6 +196,7 @@ class TrekMeshService : Service() {
                     return
                 }
                 connectedEndpoints.add(endpointId)
+                TrekMeshBus.updatePeerCount(connectedEndpoints.size)
                 TrekMeshBus.emitLog("Connesso a $name")
                 serviceScope.launch { flushBufferTo(endpointId) }
             } else {
@@ -208,6 +210,7 @@ class TrekMeshService : Service() {
             connectedEndpoints.remove(endpointId)
             pendingEndpoints.remove(endpointId)
             endpointNames.remove(endpointId)
+            TrekMeshBus.updatePeerCount(connectedEndpoints.size)
             TrekMeshBus.emitLog("Disconnesso da $name")
         }
     }
@@ -332,7 +335,19 @@ class TrekMeshService : Service() {
             } else ""
         } ?: ""
         
-        showMessageNotification(sender, type, priority, text + distanceStr)
+        showMessageNotification(
+            msgId = msgId,
+            sender = sender,
+            type = type,
+            priority = priority,
+            text = text + distanceStr,
+            description = description,
+            ttl = receivedTtl,
+            timestamp = System.currentTimeMillis(),
+            lat = lat,
+            lon = lon,
+            alt = alt
+        )
 
         if (type == "SOS" && priority >= 3 && UserRolePrefs.getRole(this) == UserRole.RIFUGIO) {
             serviceScope.launch {
@@ -844,7 +859,19 @@ class TrekMeshService : Service() {
         return "$prefix-$suffix"
     }
 
-    private fun showMessageNotification(sender: String, type: String, priority: Int, text: String) {
+    private fun showMessageNotification(
+        msgId: String,
+        sender: String,
+        type: String,
+        priority: Int,
+        text: String,
+        description: String = "",
+        ttl: Int = 0,
+        timestamp: Long = System.currentTimeMillis(),
+        lat: Double = 0.0,
+        lon: Double = 0.0,
+        alt: Double = 0.0
+    ) {
         val isSos = type == "SOS"
         val filter = NotificationPrefs.getFilter(this)
         val shouldShow = when (filter) {
@@ -854,6 +881,29 @@ class TrekMeshService : Service() {
             NotificationFilter.DISABLED  -> false
         }
         if (!shouldShow) return
+
+        val detailIntent = Intent(this, MessageDetailActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(MessageDetailActivity.EXTRA_ID,        msgId)
+            putExtra(MessageDetailActivity.EXTRA_SENDER,    sender)
+            putExtra(MessageDetailActivity.EXTRA_TYPE,      type)
+            putExtra(MessageDetailActivity.EXTRA_PRIORITY,  priority)
+            putExtra(MessageDetailActivity.EXTRA_TEXT,      text)
+            putExtra(MessageDetailActivity.EXTRA_DESC,      description)
+            putExtra(MessageDetailActivity.EXTRA_STATUS,    "RECEIVED")
+            putExtra(MessageDetailActivity.EXTRA_TTL,       ttl)
+            putExtra(MessageDetailActivity.EXTRA_TIMESTAMP, timestamp)
+            putExtra(MessageDetailActivity.EXTRA_LAT,       lat)
+            putExtra(MessageDetailActivity.EXTRA_LON,       lon)
+            putExtra(MessageDetailActivity.EXTRA_ALT,       alt)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            alertNotificationCounter,
+            detailIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val title = if (isSos) "🆘 SOS da $sender (priorità $priority)" else "📩 Messaggio da $sender"
         val nm = getSystemService(NotificationManager::class.java) ?: return
         val notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ALERT_ID)
@@ -865,6 +915,7 @@ class TrekMeshService : Service() {
             .setCategory(if (isSos) NotificationCompat.CATEGORY_ALARM else NotificationCompat.CATEGORY_MESSAGE)
             .setVibrate(if (isSos) longArrayOf(0, 500, 200, 500, 200, 500) else longArrayOf(0, 250))
             .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
             .build()
         nm.notify(alertNotificationCounter++, notification)
     }

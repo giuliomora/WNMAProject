@@ -24,8 +24,9 @@ class ReceivedMessagesFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 TrekMeshBus.messages.collect { messages ->
+                    val expiryCutoff = System.currentTimeMillis() - 30 * 60 * 1000L
                     val received = messages
-                        .filter { it.status == "RECEIVED" }
+                        .filter { it.status == "RECEIVED" && (it.ttl > 0 || it.timestamp > expiryCutoff) }
                         .sortedWith(
                             compareByDescending<ChatMessage> { if (it.type == "SOS") it.priority + 3 else it.priority }
                                 .thenByDescending { it.ttl >= 6 } // "vicino a te" prima
