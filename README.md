@@ -34,7 +34,8 @@ Messages propagate through the network based on a **Time To Live (TTL)** system:
 *   **Standard Messages:** 7 hops (can cover several kilometers in a populated trail).
 *   **Area Broadcasts:** 15 hops (designed to cover wide valleys from a high-altitude gateway).
 *   **Deduplication:** A persistent cache ensures nodes never process or forward the same message twice, preventing "broadcast storms."
-*   **Visual TTL Indicator:** Each received message card shows remaining hops with a color-coded badge (green ≥5, orange 2–4, red ≤1). Messages with TTL=0 are automatically hidden from the inbox after 30 minutes.
+*   **Visual TTL Indicator:** Each received message card shows remaining hops with a color-coded badge (green ≥5, orange 2–4, red ≤1).
+*   **Time-Based Expiry:** Messages are automatically purged from both DB and UI based on type and priority: BROADCAST and INFO P1–P2 expire after **6 hours**; INFO P3 and SOS expire after **24 hours**. Messages still pending delivery are never auto-deleted.
 
 ### 🚦 Intelligent Quality of Service (QoS)
 The network implements a tiered priority system in the transmission buffer:
@@ -54,7 +55,8 @@ Nodes can assume two distinct roles to optimize network utility:
     *   **Fixed Identity:** Rifugio nodes retain a persistent name across reboots so peer devices always recognise them.
     *   **Cloud SOS Relay:** Automatically forwards mesh-received SOS messages to **Civil Protection** via HTTP API — exclusively available to Rifugio nodes.
     *   **Relay Confirmation:** A push notification confirms when an SOS has been successfully delivered to Civil Protection.
-    *   **Auto-Weather Injection:** Fetches weather updates via internet (when available) and broadcasts them into the mesh every hour.
+    *   **SOS Status Management:** Rifugio nodes can mark any SOS (received or self-sent) as **"Preso in carico"** (acknowledged) or **"Risolto"** (resolved). The status update propagates through the entire mesh — all nodes see the card update in real time: orange for acknowledged, green for resolved.
+    *   **Auto-Weather Injection:** Fetches weather updates via internet (when available) and broadcasts them into the mesh every hour. The bulletin includes the fetch time (e.g., *Bollettino Meteo [14:30]: clear, Temp: 18°C*).
     *   **Trail Alerts:** Rifugios can send area-wide alerts (e.g., *"Trail 101 closed due to landslide"*) that propagate up to 15 hops.
 
 ---
