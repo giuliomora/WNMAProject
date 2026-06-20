@@ -26,6 +26,7 @@ class MainActivity : AppCompatActivity() {
         
         setupSafetyTimerUI()
         setupMeshStatusUI()
+        setupUnreadBadge()
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -79,6 +80,21 @@ class MainActivity : AppCompatActivity() {
                     }
                     .setNegativeButton("Annulla", null)
                     .show()
+            }
+        }
+    }
+
+    private fun setupUnreadBadge() {
+        val tabLayout = findViewById<TabLayout>(R.id.tab_layout)
+        lifecycleScope.launch {
+            TrekMeshBus.unreadCount.collect { count ->
+                val badge = tabLayout.getTabAt(0)?.orCreateBadge
+                if (count > 0) {
+                    badge?.isVisible = true
+                    badge?.number = count
+                } else {
+                    tabLayout.getTabAt(0)?.removeBadge()
+                }
             }
         }
     }

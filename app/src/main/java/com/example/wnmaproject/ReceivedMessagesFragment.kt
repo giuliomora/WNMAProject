@@ -17,6 +17,11 @@ class ReceivedMessagesFragment : Fragment() {
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View =
         inflater.inflate(R.layout.fragment_messages, container, false)
 
+    override fun onResume() {
+        super.onResume()
+        TrekMeshBus.resetUnread()
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         val scroll = view.findViewById<ScrollView>(R.id.scroll_messages)
         val container = view.findViewById<LinearLayout>(R.id.container_messages)

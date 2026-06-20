@@ -75,6 +75,7 @@ object TrekMeshBus {
         val label = if (isOwn) "Tu" else sender
         val status = if (isOwn) "PENDING" else "RECEIVED"
         _messages.update { it + ChatMessage(id, label, type, priority, text, description, imagePath, lat, lon, alt, status, ttl, timestamp) }
+        if (!isOwn) incrementUnread()
     }
 
     fun updateMessageStatus(id: String, status: String) {
@@ -91,6 +92,12 @@ object TrekMeshBus {
 
     private val _peerCount = MutableStateFlow(0)
     val peerCount = _peerCount.asStateFlow()
+
+    private val _unreadCount = MutableStateFlow(0)
+    val unreadCount = _unreadCount.asStateFlow()
+
+    fun incrementUnread() { _unreadCount.update { it + 1 } }
+    fun resetUnread()     { _unreadCount.value = 0 }
 
     fun updatePeerCount(count: Int) {
         _peerCount.value = count

@@ -162,6 +162,7 @@ class TrekMeshService : Service() {
     }
 
     private val connectedEndpoints = java.util.concurrent.CopyOnWriteArraySet<String>()
+    private val connectionRetries = mutableMapOf<String, Int>()
     private val pendingEndpoints = mutableSetOf<String>()
     private val endpointNames = mutableMapOf<String, String>()
     private val seenMessageIds = mutableSetOf<String>()
@@ -196,12 +197,30 @@ class TrekMeshService : Service() {
                     return
                 }
                 connectedEndpoints.add(endpointId)
+                connectionRetries.remove(endpointId)
                 TrekMeshBus.updatePeerCount(connectedEndpoints.size)
                 TrekMeshBus.emitLog("Connesso a $name")
                 serviceScope.launch { flushBufferTo(endpointId) }
             } else {
-                endpointNames.remove(endpointId)
-                TrekMeshBus.emitLog("Connessione fallita (codice: ${resolution.status.statusCode})")
+                val code = resolution.status.statusCode
+                val retries = connectionRetries[endpointId] ?: 0
+                // Errore 13 (STATUS_ERROR) = race condition P2P_CLUSTER, retry automatico
+                if (code == 13 && retries < 3) {
+                    connectionRetries[endpointId] = retries + 1
+                    Log.d(LOG_TAG, "Errore 13 da ${endpointNames[endpointId]}, retry ${retries + 1}/3...")
+                    val service = this@TrekMeshService
+                    serviceScope.launch {
+                        delay(2000L * (retries + 1))
+                        if (endpointId !in connectedEndpoints && endpointId !in pendingEndpoints) {
+                            pendingEndpoints.add(endpointId)
+                            service.retryConnection(endpointId)
+                        }
+                    }
+                } else {
+                    connectionRetries.remove(endpointId)
+                    endpointNames.remove(endpointId)
+                    TrekMeshBus.emitLog("Connessione fallita (codice: $code)")
+                }
             }
         }
 
@@ -686,20 +705,22 @@ class TrekMeshService : Service() {
                 if (msg.type == "SOS" && msg.priority >= 3) {
                     forceHighPowerScan()
                     updateBeaconStatus(true)
-                    serviceScope.launch {
-                        val relayed = ProtezioneCivileRelay.sendAlert(
-                            messageId = msg.id,
-                            sender = localEndpointName,
-                            type = msg.type,
-                            priority = msg.priority,
-                            text = msg.text,
-                            description = msg.description,
-                            rifugioName = localEndpointName,
-                            dao = db.pendingAlertDao()
-                        )
-                        val logMsg = if (relayed) "SOS inoltrato alla Protezione Civile ✓"
-                                     else "Connessione assente — SOS in coda, verrà reinoltrato automaticamente"
-                        TrekMeshBus.emitLog(logMsg)
+                    if (UserRolePrefs.getRole(this@TrekMeshService) == UserRole.RIFUGIO) {
+                        serviceScope.launch {
+                            val relayed = ProtezioneCivileRelay.sendAlert(
+                                messageId = msg.id,
+                                sender = localEndpointName,
+                                type = msg.type,
+                                priority = msg.priority,
+                                text = msg.text,
+                                description = msg.description,
+                                rifugioName = localEndpointName,
+                                dao = db.pendingAlertDao()
+                            )
+                            val logMsg = if (relayed) "SOS inoltrato alla Protezione Civile ✓"
+                                         else "Connessione assente — SOS in coda, verrà reinoltrato automaticamente"
+                            TrekMeshBus.emitLog(logMsg)
+                        }
                     }
                 }
 
@@ -871,15 +892,27 @@ class TrekMeshService : Service() {
             .addOnFailureListener { e -> TrekMeshBus.emitLog("Errore discovery: ${e.message}") }
     }
 
+    private fun retryConnection(endpointId: String) {
+        connectionsClient.requestConnection(localEndpointName, endpointId, connectionLifecycleCallback)
+    }
+
     private fun generateEndpointName(): String {
         val bytes = ByteArray(4)
         SecureRandom().nextBytes(bytes)
         val suffix = bytes.joinToString("") { "%02X".format(it) }
-        val prefix = when (UserRolePrefs.getRole(this)) {
-            UserRole.RIFUGIO -> "Rifugio"
-            else -> "Hiker"
+        return when (UserRolePrefs.getRole(this)) {
+            UserRole.RIFUGIO -> {
+                val prefs = getSharedPreferences("trekmesh_node", MODE_PRIVATE)
+                val stored = prefs.getString("rifugio_name", null)
+                if (stored != null) stored
+                else {
+                    val name = "Rifugio-$suffix"
+                    prefs.edit().putString("rifugio_name", name).apply()
+                    name
+                }
+            }
+            else -> "Hiker-$suffix"
         }
-        return "$prefix-$suffix"
     }
 
     private fun showMessageNotification(
