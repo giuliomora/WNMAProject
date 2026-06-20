@@ -385,9 +385,7 @@ class TrekMeshService : Service() {
                     rifugioName = localEndpointName,
                     dao = db.pendingAlertDao()
                 )
-                val logMsg = if (relayed) "SOS inoltrato alla Protezione Civile ✓"
-                             else "Connessione assente — SOS in coda, verrà reinoltrato automaticamente"
-                TrekMeshBus.emitLog(logMsg)
+                if (relayed) TrekMeshBus.emitLog("SOS inoltrato alla Protezione Civile ✓")
             }
         }
 
@@ -717,9 +715,7 @@ class TrekMeshService : Service() {
                                 rifugioName = localEndpointName,
                                 dao = db.pendingAlertDao()
                             )
-                            val logMsg = if (relayed) "SOS inoltrato alla Protezione Civile ✓"
-                                         else "Connessione assente — SOS in coda, verrà reinoltrato automaticamente"
-                            TrekMeshBus.emitLog(logMsg)
+                            if (relayed) TrekMeshBus.emitLog("SOS inoltrato alla Protezione Civile ✓")
                         }
                     }
                 }

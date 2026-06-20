@@ -92,12 +92,23 @@ object ProtezioneCivileRelay {
             val code = conn.responseCode
             conn.disconnect()
 
-            if (code in 200..299) {
-                Log.i(LOG_TAG, "SOS inoltrato alla Protezione Civile (HTTP $code)")
-                true
-            } else {
-                Log.w(LOG_TAG, "Risposta inattesa dalla Protezione Civile: HTTP $code")
-                false
+            when {
+                code in 200..299 -> {
+                    Log.i(LOG_TAG, "SOS inoltrato alla Protezione Civile (HTTP $code)")
+                    true
+                }
+                code in 500..599 -> {
+                    // Server temporaneamente non disponibile: metti in coda per retry
+                    Log.w(LOG_TAG, "Server Protezione Civile non disponibile (HTTP $code), retry programmato")
+                    TrekMeshBus.emitLog("Server PC non disponibile (HTTP $code) — SOS in coda, retry automatico")
+                    false
+                }
+                else -> {
+                    // Errore client (4xx) o altro: non ha senso fare retry
+                    Log.w(LOG_TAG, "Errore invio SOS (HTTP $code), non verrà ritentato")
+                    TrekMeshBus.emitLog("Errore invio SOS alla Protezione Civile (HTTP $code)")
+                    true // Considera inviato per non riempire la coda
+                }
             }
         } catch (e: Exception) {
             Log.e(LOG_TAG, "Errore inoltro SOS alla Protezione Civile", e)
