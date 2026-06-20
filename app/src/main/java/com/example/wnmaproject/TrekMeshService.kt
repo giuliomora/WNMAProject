@@ -161,7 +161,7 @@ class TrekMeshService : Service() {
         }
     }
 
-    private val connectedEndpoints = mutableSetOf<String>()
+    private val connectedEndpoints = java.util.Collections.synchronizedSet(mutableSetOf<String>())
     private val pendingEndpoints = mutableSetOf<String>()
     private val endpointNames = mutableMapOf<String, String>()
     private val seenMessageIds = mutableSetOf<String>()
@@ -229,8 +229,12 @@ class TrekMeshService : Service() {
         }
 
         override fun onEndpointLost(endpointId: String) {
-            val name = endpointNames[endpointId] ?: endpointId
-            TrekMeshBus.emitLog("Dispositivo perso: $name")
+            // onEndpointLost riguarda il discovery, non la connessione:
+            // se il peer è già connesso, la connessione rimane attiva — ignoriamo
+            if (endpointId in connectedEndpoints) return
+            val name = endpointNames.remove(endpointId) ?: endpointId
+            pendingEndpoints.remove(endpointId)
+            TrekMeshBus.emitLog("Dispositivo perso di vista (non connesso): $name")
         }
     }
 
