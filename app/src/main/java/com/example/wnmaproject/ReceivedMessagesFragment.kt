@@ -29,9 +29,20 @@ class ReceivedMessagesFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 TrekMeshBus.messages.collect { messages ->
-                    val expiryCutoff = System.currentTimeMillis() - 30 * 60 * 1000L
+                    val now = System.currentTimeMillis()
+                    val sixH = now - 6 * 60 * 60 * 1000L
+                    val twentyFourH = now - 24 * 60 * 60 * 1000L
                     val received = messages
-                        .filter { it.status == "RECEIVED" && (it.ttl > 0 || it.timestamp > expiryCutoff) }
+                        .filter { msg ->
+                            if (msg.status != "RECEIVED") return@filter false
+                            when {
+                                msg.type == "BROADCAST" -> msg.timestamp > sixH
+                                msg.type == "INFO" && msg.priority < 3 -> msg.timestamp > sixH
+                                msg.type == "INFO" && msg.priority >= 3 -> msg.timestamp > twentyFourH
+                                msg.type == "SOS" -> msg.timestamp > twentyFourH
+                                else -> true
+                            }
+                        }
                         .sortedWith(
                             compareByDescending<ChatMessage> { if (it.type == "SOS") it.priority + 3 else it.priority }
                                 .thenByDescending { it.ttl >= 6 } // "vicino a te" prima

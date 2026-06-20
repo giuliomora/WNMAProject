@@ -37,8 +37,17 @@ interface MessageDao {
     @Query("UPDATE messages SET image_path = :imagePath WHERE id = :id")
     suspend fun updateImagePath(id: String, imagePath: String)
 
-    @Query("DELETE FROM messages WHERE ttl <= 0")
-    suspend fun deleteExpired()
+    @Query("""
+        DELETE FROM messages WHERE ttl <= 0
+        OR (type = 'BROADCAST' AND timestamp < :sixHoursAgo)
+        OR (type = 'INFO' AND priority < 3 AND timestamp < :sixHoursAgo)
+        OR (type = 'INFO' AND priority >= 3 AND timestamp < :twentyFourHoursAgo)
+        OR (type = 'SOS' AND timestamp < :twentyFourHoursAgo)
+    """)
+    suspend fun deleteExpired(
+        sixHoursAgo: Long = System.currentTimeMillis() - 6 * 60 * 60 * 1000L,
+        twentyFourHoursAgo: Long = System.currentTimeMillis() - 24 * 60 * 60 * 1000L
+    )
 
     @Query("""
         DELETE FROM messages WHERE id NOT IN (

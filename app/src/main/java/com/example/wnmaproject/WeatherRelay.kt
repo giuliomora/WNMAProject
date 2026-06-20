@@ -6,6 +6,9 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 object WeatherRelay {
     private const val LOG_TAG = "WeatherRelay"
@@ -27,7 +30,8 @@ object WeatherRelay {
             val status = args.getString("weather")
             val temp = args.getString("temp")
             
-            "Bollettino Meteo: $status, Temp: $temp°C"
+            val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+            "Bollettino Meteo [$time]: $status, Temp: $temp°C"
         } catch (e: Exception) {
             Log.e(LOG_TAG, "Errore recupero meteo", e)
             null
