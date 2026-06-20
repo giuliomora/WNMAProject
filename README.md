@@ -48,8 +48,12 @@ The network implements a tiered priority system in the transmission buffer:
 
 Nodes can assume two distinct roles to optimize network utility:
 *   **Hiker Role:** Standard profile for communication and mesh relaying.
+    *   **Ephemeral Identity:** A new random node name (e.g., `Hiker-A3F9`) is generated each session for privacy — no long-term tracking across treks.
+    *   **Mesh Toggle:** Hikers can disable the mesh service from Settings when not in the mountains, preventing unnecessary battery drain and auto-boot.
 *   **Rifugio (Mountain Hut) Role:** Acts as a **High-Priority Safety Gateway**.
-    *   **Cloud SOS Relay:** Automatically forwards mesh-received SOS messages to **Civil Protection** via HTTP API.
+    *   **Fixed Identity:** Rifugio nodes retain a persistent name across reboots so peer devices always recognise them.
+    *   **Cloud SOS Relay:** Automatically forwards mesh-received SOS messages to **Civil Protection** via HTTP API — exclusively available to Rifugio nodes.
+    *   **Relay Confirmation:** A push notification confirms when an SOS has been successfully delivered to Civil Protection.
     *   **Auto-Weather Injection:** Fetches weather updates via internet (when available) and broadcasts them into the mesh every hour.
     *   **Trail Alerts:** Rifugios can send area-wide alerts (e.g., *"Trail 101 closed due to landslide"*) that propagate up to 15 hops.
 
@@ -68,12 +72,21 @@ Incoming message notifications open directly into a full **Message Detail Screen
 ### 📶 Live Mesh Status Bar
 A status bar above the message tabs shows the current number of connected peers in real time — grey when isolated, green when nodes are reachable.
 
+### 🔴 Unread Badge
+The "Received" tab shows a live badge counter for unread incoming messages, reset automatically when the tab is opened.
+
+### ⚙️ Settings
+*   **Mesh Service Toggle:** Enable or disable the mesh service on demand. When disabled, the service stops immediately and will not restart on next boot — ideal for hikers between treks.
+*   **Notification Filter:** Choose which message types trigger notifications (All / SOS only / Info only / Disabled).
+*   **Role Switch:** Change between Hiker and Rifugio roles (restarts the mesh service).
+
 ---
 
 ## 🔒 Privacy & Rich Media
 *   **AES-256-GCM Encryption:** All message payloads, including GPS metadata, are encrypted end-to-end. Tamper protection ensures corrupted data is discarded.
 *   **Bandwidth Upgrade:** The app automatically switches from Bluetooth to Wi-Fi Direct when transferring **images** for situational context.
-*   **Ephemeral Identity:** Random session names (e.g., `Hiker-A3F9`) prevent long-term tracking of hikers.
+*   **Ephemeral Hiker Identity:** Random session names (e.g., `Hiker-A3F9`) are regenerated each session, preventing long-term tracking across treks.
+*   **Persistent Rifugio Identity:** Rifugio nodes keep a fixed name stored in SharedPreferences so peers always recognise the gateway.
 
 ---
 
