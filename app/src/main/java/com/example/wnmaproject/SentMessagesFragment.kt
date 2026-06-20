@@ -25,7 +25,7 @@ class SentMessagesFragment : Fragment() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 TrekMeshBus.messages.collect { messages ->
                     val sent = messages
-                        .filter { it.status == "PENDING" || it.status == "DELIVERED" }
+                        .filter { it.status in listOf("PENDING", "DELIVERED", "ACKNOWLEDGED", "RESOLVED") }
                         .sortedByDescending { it.timestamp }
                     container.removeAllViews()
                     sent.forEach { container.addView(buildMessageCard(requireContext(), it)) }

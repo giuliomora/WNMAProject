@@ -154,8 +154,8 @@ fun buildMessageCard(context: Context, msg: ChatMessage): View {
         })
     }
 
-    // Bottoni gestione SOS — solo per rifugi su SOS ricevuti
-    if (isSos && !isOwn && isRifugio) {
+    // Bottoni gestione SOS — solo per rifugi
+    if (isSos && isRifugio) {
         val localName = UserRolePrefs.getStoredRifugioName(context) ?: "Rifugio"
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
