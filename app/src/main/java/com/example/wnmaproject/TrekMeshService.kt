@@ -161,7 +161,7 @@ class TrekMeshService : Service() {
         }
     }
 
-    private val connectedEndpoints = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+    private val connectedEndpoints = java.util.concurrent.CopyOnWriteArraySet<String>()
     private val pendingEndpoints = mutableSetOf<String>()
     private val endpointNames = mutableMapOf<String, String>()
     private val seenMessageIds = mutableSetOf<String>()
@@ -232,9 +232,10 @@ class TrekMeshService : Service() {
             // onEndpointLost riguarda il discovery, non la connessione:
             // se il peer è già connesso, la connessione rimane attiva — ignoriamo
             if (endpointId in connectedEndpoints) return
-            val name = endpointNames.remove(endpointId) ?: endpointId
+            val name = endpointNames.remove(endpointId)
             pendingEndpoints.remove(endpointId)
-            TrekMeshBus.emitLog("Dispositivo perso di vista (non connesso): $name")
+            // Logghiamo solo se avevamo effettivamente avviato una connessione con questo peer
+            if (name != null) Log.d(LOG_TAG, "Endpoint perso di vista (mai connesso): $name")
         }
     }
 
@@ -434,6 +435,9 @@ class TrekMeshService : Service() {
                 }
             }
         }
+        // Retry SOS in coda se la rete era già disponibile all'avvio
+        serviceScope.launch { ProtezioneCivileRelay.retryPending(db.pendingAlertDao()) }
+
         listenForOutgoingMessages()
         listenForSafetyActions()
         startPeriodicCleanup()
@@ -514,6 +518,11 @@ class TrekMeshService : Service() {
 
     @SuppressLint("MissingPermission")
     private fun startBleBeaconing() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            checkSelfPermission(android.Manifest.permission.BLUETOOTH_ADVERTISE) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            Log.w(LOG_TAG, "BLUETOOTH_ADVERTISE non concesso, beaconing BLE disabilitato")
+            return
+        }
         val advertiser = bluetoothManager?.adapter?.bluetoothLeAdvertiser
         if (advertiser == null) {
             Log.w(LOG_TAG, "BLE Advertiser non disponibile")
@@ -558,6 +567,11 @@ class TrekMeshService : Service() {
 
     @SuppressLint("MissingPermission")
     private fun startBleScanner() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            checkSelfPermission(android.Manifest.permission.BLUETOOTH_SCAN) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            Log.w(LOG_TAG, "BLUETOOTH_SCAN non concesso, BLE scanner disabilitato")
+            return
+        }
         val scanner = bluetoothManager?.adapter?.bluetoothLeScanner ?: return
         
         val filter = ScanFilter.Builder()
@@ -589,7 +603,7 @@ class TrekMeshService : Service() {
                 
                 if (remoteStatus == 1) {
                     val lastSeen = seenBeaconIds[key] ?: 0L
-                    if (now - lastSeen > 60_000) {
+                    if (now - lastSeen > 5 * 60_000L) { // dedup 5 minuti
                         seenBeaconIds[key] = now
                         val distMsg = if (remoteLat != 0.0f) {
                             val results = FloatArray(1)
@@ -598,10 +612,15 @@ class TrekMeshService : Service() {
                                 " a circa %.0fm".format(results[0])
                             } ?: ""
                         } else ""
-                        
-                        TrekMeshBus.emitLog("🚨 SOS passivo captato$distMsg!")
-                        if (UserRolePrefs.getRole(this@TrekMeshService) == UserRole.RIFUGIO) {
-                            TrekMeshBus.emitLog("Rifugio: Beacon SOS rilevato, allerta pronta.")
+
+                        // Non loggare se siamo già connessi a questo peer via Nearby
+                        // (il beacon BLE è un fallback per quando non c'è connessione dati)
+                        val alreadyConnected = connectedEndpoints.isNotEmpty()
+                        if (!alreadyConnected) {
+                            TrekMeshBus.emitLog("🚨 SOS passivo captato$distMsg! (beacon BLE, nessuna connessione mesh attiva)")
+                            if (UserRolePrefs.getRole(this@TrekMeshService) == UserRole.RIFUGIO) {
+                                TrekMeshBus.emitLog("Rifugio: avvicinarsi all'escursionista per stabilire connessione mesh e inoltro SOS.")
+                            }
                         }
                     }
                 }

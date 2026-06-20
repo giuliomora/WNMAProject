@@ -101,6 +101,7 @@ object ProtezioneCivileRelay {
             }
         } catch (e: Exception) {
             Log.e(LOG_TAG, "Errore inoltro SOS alla Protezione Civile", e)
+            TrekMeshBus.emitLog("Errore relay PC: ${e.javaClass.simpleName} — ${e.message?.take(80)}")
             false
         }
     }
