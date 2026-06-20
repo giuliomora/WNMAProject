@@ -53,6 +53,14 @@ object TrekMeshBus {
     private val _outgoing = MutableSharedFlow<OutgoingMessage>(extraBufferCapacity = 64)
     val outgoing = _outgoing.asSharedFlow()
 
+    data class SosStatusUpdate(val msgId: String, val status: String, val rifugioName: String)
+    private val _sosStatusUpdates = MutableSharedFlow<SosStatusUpdate>(extraBufferCapacity = 16)
+    val sosStatusUpdates = _sosStatusUpdates.asSharedFlow()
+
+    fun sendSosStatusUpdate(msgId: String, status: String, rifugioName: String) {
+        _sosStatusUpdates.tryEmit(SosStatusUpdate(msgId, status, rifugioName))
+    }
+
     fun emitLog(message: String) {
         _logs.update { it + message }
     }

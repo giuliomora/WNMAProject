@@ -38,11 +38,14 @@ interface MessageDao {
     suspend fun updateImagePath(id: String, imagePath: String)
 
     @Query("""
-        DELETE FROM messages WHERE ttl <= 0
-        OR (type = 'BROADCAST' AND timestamp < :sixHoursAgo)
-        OR (type = 'INFO' AND priority < 3 AND timestamp < :sixHoursAgo)
-        OR (type = 'INFO' AND priority >= 3 AND timestamp < :twentyFourHoursAgo)
-        OR (type = 'SOS' AND timestamp < :twentyFourHoursAgo)
+        DELETE FROM messages WHERE status NOT IN ('PENDING', 'ACKNOWLEDGED')
+        AND (
+            ttl <= 0
+            OR (type = 'BROADCAST' AND timestamp < :sixHoursAgo)
+            OR (type = 'INFO' AND priority < 3 AND timestamp < :sixHoursAgo)
+            OR (type = 'INFO' AND priority >= 3 AND timestamp < :twentyFourHoursAgo)
+            OR (type = 'SOS' AND timestamp < :twentyFourHoursAgo)
+        )
     """)
     suspend fun deleteExpired(
         sixHoursAgo: Long = System.currentTimeMillis() - 6 * 60 * 60 * 1000L,

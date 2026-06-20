@@ -75,6 +75,7 @@ class TrekMeshService : Service() {
         private const val TYPE_MSG = "MSG"
         private const val TYPE_ACK = "ACK"
         private const val TYPE_BROADCAST = "BROADCAST"
+        private const val TYPE_SOS_STATUS = "SOS_STATUS"
         private const val FIELD_SEP = "" // ASCII Unit Separator
 
         private const val SCAN_LOW_POWER_MS = 3 * 60 * 1000L // 3 minuti solo BT
@@ -265,8 +266,9 @@ class TrekMeshService : Service() {
                 Payload.Type.BYTES -> {
                     val raw = String(payload.asBytes() ?: return, Charsets.UTF_8)
                     when (raw.substringBefore("|")) {
-                        TYPE_MSG -> handleIncomingMessage(endpointId, raw)
-                        TYPE_ACK -> handleIncomingAck(raw)
+                        TYPE_MSG        -> handleIncomingMessage(endpointId, raw)
+                        TYPE_ACK        -> handleIncomingAck(raw)
+                        TYPE_SOS_STATUS -> handleIncomingSosStatus(endpointId, raw)
                         else -> Log.w(LOG_TAG, "Tipo sconosciuto da $endpointId")
                     }
                 }
@@ -410,6 +412,27 @@ class TrekMeshService : Service() {
         TrekMeshBus.emitLog("Messaggio consegnato a $ackerName")
     }
 
+    private fun handleIncomingSosStatus(endpointId: String, raw: String) {
+        // Wire: SOS_STATUS|msgId|status|rifugioName
+        val parts = raw.split("|", limit = 4)
+        if (parts.size < 4) return
+        val (_, msgId, status, rifugioName) = parts
+        serviceScope.launch { db.messageDao().updateStatus(msgId, status) }
+        TrekMeshBus.updateMessageStatus(msgId, status)
+        val label = when (status) {
+            "ACKNOWLEDGED" -> "preso in carico da $rifugioName"
+            "RESOLVED"     -> "risolto da $rifugioName"
+            else           -> status
+        }
+        TrekMeshBus.emitLog("SOS $label")
+        // Propaga agli altri nodi
+        val forward = "$TYPE_SOS_STATUS|$msgId|$status|$rifugioName"
+        val payload = Payload.fromBytes(forward.toByteArray(Charsets.UTF_8))
+        (connectedEndpoints - endpointId).forEach {
+            connectionsClient.sendPayload(it, payload)
+        }
+    }
+
     private fun sendAck(endpointId: String, originalMsgId: String) {
         val ack = "$TYPE_ACK|$originalMsgId|$localEndpointName"
         connectionsClient.sendPayload(endpointId, Payload.fromBytes(ack.toByteArray(Charsets.UTF_8)))
@@ -460,6 +483,7 @@ class TrekMeshService : Service() {
         serviceScope.launch { ProtezioneCivileRelay.retryPending(db.pendingAlertDao()) }
 
         listenForOutgoingMessages()
+        listenForSosStatusUpdates()
         listenForSafetyActions()
         startPeriodicCleanup()
         startBleBeaconing()
@@ -482,6 +506,17 @@ class TrekMeshService : Service() {
                     ))
                 }
                 delay(WEATHER_RELAY_INTERVAL_MS)
+            }
+        }
+    }
+
+    private fun listenForSosStatusUpdates() {
+        serviceScope.launch {
+            TrekMeshBus.sosStatusUpdates.collect { update ->
+                serviceScope.launch { db.messageDao().updateStatus(update.msgId, update.status) }
+                val wire = "$TYPE_SOS_STATUS|${update.msgId}|${update.status}|${update.rifugioName}"
+                val payload = Payload.fromBytes(wire.toByteArray(Charsets.UTF_8))
+                connectedEndpoints.forEach { connectionsClient.sendPayload(it, payload) }
             }
         }
     }
