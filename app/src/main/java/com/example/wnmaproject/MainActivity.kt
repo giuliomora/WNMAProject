@@ -34,7 +34,9 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
-        startForegroundService(Intent(this, TrekMeshService::class.java))
+        if (MeshServicePrefs.isEnabled(this)) {
+            startForegroundService(Intent(this, TrekMeshService::class.java))
+        }
 
         val isDebug = applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
 

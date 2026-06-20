@@ -16,6 +16,8 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
 
+        if (!MeshServicePrefs.isEnabled(context)) return
+
         if (hasCriticalPermissions(context)) {
             context.startForegroundService(Intent(context, TrekMeshService::class.java))
         } else {

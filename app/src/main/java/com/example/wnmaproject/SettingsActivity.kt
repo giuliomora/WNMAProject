@@ -7,6 +7,7 @@ import android.widget.RadioGroup
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.SwitchCompat
 
 class SettingsActivity : AppCompatActivity() {
 
@@ -16,8 +17,38 @@ class SettingsActivity : AppCompatActivity() {
 
         findViewById<ImageButton>(R.id.btn_back).setOnClickListener { finish() }
 
+        setupMeshServiceSection()
         setupRoleSection()
         setupNotificationSection()
+    }
+
+    private fun setupMeshServiceSection() {
+        val switch = findViewById<SwitchCompat>(R.id.switch_mesh_service)
+        val statusText = findViewById<TextView>(R.id.tv_service_status)
+        val enabled = MeshServicePrefs.isEnabled(this)
+        switch.isChecked = enabled
+        updateServiceStatusUI(statusText, enabled)
+
+        switch.setOnCheckedChangeListener { _, isChecked ->
+            MeshServicePrefs.setEnabled(this, isChecked)
+            updateServiceStatusUI(statusText, isChecked)
+            val serviceIntent = android.content.Intent(this, TrekMeshService::class.java)
+            if (isChecked) {
+                startForegroundService(serviceIntent)
+            } else {
+                stopService(serviceIntent)
+            }
+        }
+    }
+
+    private fun updateServiceStatusUI(tv: TextView, enabled: Boolean) {
+        if (enabled) {
+            tv.text = "Mesh attiva"
+            tv.setTextColor(0xFF4CAF50.toInt())
+        } else {
+            tv.text = "Mesh disattivata"
+            tv.setTextColor(0xFF888888.toInt())
+        }
     }
 
     private fun setupRoleSection() {
