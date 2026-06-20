@@ -34,6 +34,7 @@ class ReceivedMessagesFragment : Fragment() {
                     val twentyFourH = now - 24 * 60 * 60 * 1000L
                     val received = messages
                         .filter { msg ->
+                            if (msg.label == "Tu") return@filter false
                             if (msg.status !in listOf("RECEIVED", "ACKNOWLEDGED", "RESOLVED")) return@filter false
                             when {
                                 msg.type == "BROADCAST" -> msg.timestamp > sixH
