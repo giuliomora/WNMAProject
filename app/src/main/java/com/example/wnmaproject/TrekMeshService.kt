@@ -66,6 +66,7 @@ class TrekMeshService : Service() {
         private const val LOG_TAG = "TrekMeshService"
         private const val NOTIFICATION_CHANNEL_ID = "trekmesh_p2p_channel"
         private const val NOTIFICATION_CHANNEL_ALERT_ID = "trekmesh_alert_channel"
+        private const val NOTIFICATION_CHANNEL_RELAY_ID = "trekmesh_relay_channel"
         private const val NOTIFICATION_ID = 1
         private const val NOTIFICATION_ALERT_BASE_ID = 1000
         private const val INITIAL_TTL = 7
@@ -385,7 +386,10 @@ class TrekMeshService : Service() {
                     rifugioName = localEndpointName,
                     dao = db.pendingAlertDao()
                 )
-                if (relayed) TrekMeshBus.emitLog("SOS inoltrato alla Protezione Civile ✓")
+                if (relayed) {
+                    TrekMeshBus.emitLog("SOS inoltrato alla Protezione Civile ✓")
+                    showRelayConfirmNotification(sender)
+                }
             }
         }
 
@@ -715,7 +719,10 @@ class TrekMeshService : Service() {
                                 rifugioName = localEndpointName,
                                 dao = db.pendingAlertDao()
                             )
-                            if (relayed) TrekMeshBus.emitLog("SOS inoltrato alla Protezione Civile ✓")
+                            if (relayed) {
+                                TrekMeshBus.emitLog("SOS inoltrato alla Protezione Civile ✓")
+                                showRelayConfirmNotification(localEndpointName)
+                            }
                         }
                     }
                 }
@@ -983,8 +990,24 @@ class TrekMeshService : Service() {
                 description = "Notifiche per messaggi e SOS ricevuti"
                 enableVibration(true)
             }
+        val relayChannel = NotificationChannel(NOTIFICATION_CHANNEL_RELAY_ID, "TrekMesh Relay PC",
+            NotificationManager.IMPORTANCE_DEFAULT)
+            .apply { description = "Conferma inoltro SOS alla Protezione Civile" }
         nm.createNotificationChannel(serviceChannel)
         nm.createNotificationChannel(alertChannel)
+        nm.createNotificationChannel(relayChannel)
+    }
+
+    fun showRelayConfirmNotification(sender: String) {
+        val nm = getSystemService(NotificationManager::class.java) ?: return
+        val notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_RELAY_ID)
+            .setContentTitle("✅ SOS inoltrato alla Protezione Civile")
+            .setContentText("L'SOS di $sender è stato trasmesso con successo.")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .build()
+        nm.notify(NOTIFICATION_ALERT_BASE_ID - 1, notification)
     }
 
     private fun createNotification(): Notification =
