@@ -489,6 +489,7 @@ class TrekMeshService : Service() {
         listenForOutgoingMessages()
         listenForSosStatusUpdates()
         listenForResolveVotes()
+        listenForDeleteMessages()
         listenForSafetyActions()
         startPeriodicCleanup()
         startBleBeaconing()
@@ -540,6 +541,16 @@ class TrekMeshService : Service() {
         val forward = "$TYPE_DELETE_MSG|$msgId"
         val payload = Payload.fromBytes(forward.toByteArray(Charsets.UTF_8))
         (connectedEndpoints - endpointId).forEach { connectionsClient.sendPayload(it, payload) }
+    }
+
+    private fun listenForDeleteMessages() {
+        serviceScope.launch {
+            TrekMeshBus.deleteMessage.collect { msgId ->
+                val wire = "$TYPE_DELETE_MSG|$msgId"
+                val payload = Payload.fromBytes(wire.toByteArray(Charsets.UTF_8))
+                connectedEndpoints.forEach { connectionsClient.sendPayload(it, payload) }
+            }
+        }
     }
 
     private fun listenForResolveVotes() {
