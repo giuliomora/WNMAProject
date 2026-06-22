@@ -2,12 +2,10 @@ package com.example.trekmesh
 
 import android.content.Context
 import android.content.Intent
-import android.graphics.BitmapFactory
 import android.graphics.Typeface
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
-import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 
@@ -121,27 +119,6 @@ fun buildMessageCard(context: Context, msg: ChatMessage): View {
         setTextColor(0xFFFFFFFF.toInt())
         setPadding(0, 6, 0, 0)
     })
-
-    if (msg.description.isNotBlank()) {
-        card.addView(TextView(context).apply {
-            text = msg.description
-            textSize = 13f
-            setTextColor(0xAAFFFFFF.toInt())
-            setPadding(0, 4, 0, 0)
-        })
-    }
-
-    msg.imagePath?.let { path ->
-        BitmapFactory.decodeFile(path)?.let { bmp ->
-            card.addView(ImageView(context).apply {
-                setImageBitmap(bmp)
-                scaleType = ImageView.ScaleType.CENTER_CROP
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, 240
-                ).apply { topMargin = 8 }
-            })
-        }
-    }
 
     // Badge stato SOS (acknowledged/resolved) — visibile a tutti
     if (isSos && (isAcknowledged || isResolved)) {
