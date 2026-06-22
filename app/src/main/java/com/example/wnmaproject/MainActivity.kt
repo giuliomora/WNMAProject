@@ -64,7 +64,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         findViewById<FloatingActionButton>(R.id.fab_compose).setOnClickListener {
-            ComposeMessageDialog().show(supportFragmentManager, "compose")
+            startActivity(Intent(this, ComposeMessageActivity::class.java))
         }
 
         findViewById<FloatingActionButton>(R.id.fab_sos).setOnClickListener {
