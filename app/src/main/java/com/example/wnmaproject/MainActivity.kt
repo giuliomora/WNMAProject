@@ -109,6 +109,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupMeshStatusUI() {
         val tv = findViewById<TextView>(R.id.tv_mesh_status)
+        if (!MeshServicePrefs.isEnabled(this)) {
+            tv.text = "⚙ Attiva la mesh dalle impostazioni per utilizzare l'app"
+            tv.setTextColor(0xFFFF9800.toInt())
+            return
+        }
         lifecycleScope.launch {
             TrekMeshBus.peerCount.collect { count ->
                 if (count == 0) {
