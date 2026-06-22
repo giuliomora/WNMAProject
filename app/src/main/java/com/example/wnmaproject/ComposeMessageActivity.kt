@@ -1,6 +1,5 @@
 package com.example.trekmesh
 
-import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
@@ -11,8 +10,8 @@ import android.widget.ImageView
 import android.widget.RadioGroup
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import com.yalantis.ucrop.UCrop
 import java.io.File
-import java.io.FileOutputStream
 
 class ComposeMessageActivity : AppCompatActivity() {
 
@@ -30,7 +29,18 @@ class ComposeMessageActivity : AppCompatActivity() {
     private lateinit var btnRemoveImage: Button
 
     private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let { saveAndPreviewImage(it) }
+        uri?.let { launchCrop(it) }
+    }
+
+    private val cropLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK && result.data != null) {
+            val croppedUri = UCrop.getOutput(result.data!!) ?: return@registerForActivityResult
+            val path = croppedUri.path ?: return@registerForActivityResult
+            selectedImagePath = path
+            imagePreview.setImageBitmap(BitmapFactory.decodeFile(path))
+            imagePreview.visibility = View.VISIBLE
+            btnRemoveImage.visibility = View.VISIBLE
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -62,8 +72,8 @@ class ComposeMessageActivity : AppCompatActivity() {
         btnTypeSos.setOnClickListener       { setTypeSelected("SOS") }
         btnTypeBroadcast.setOnClickListener { setTypeSelected("BROADCAST") }
 
-        btnPickImage.setOnClickListener    { pickImageLauncher.launch("image/*") }
-        btnRemoveImage.setOnClickListener  { clearImage() }
+        btnPickImage.setOnClickListener   { pickImageLauncher.launch("image/*") }
+        btnRemoveImage.setOnClickListener { clearImage() }
 
         findViewById<Button>(R.id.btn_send).setOnClickListener { trySend() }
     }
@@ -71,6 +81,19 @@ class ComposeMessageActivity : AppCompatActivity() {
     override fun onSupportNavigateUp(): Boolean {
         finish()
         return true
+    }
+
+    private fun launchCrop(sourceUri: Uri) {
+        val outDir = File(filesDir, "images").also { it.mkdirs() }
+        val destUri = Uri.fromFile(File(outDir, "crop_${System.currentTimeMillis()}.jpg"))
+        val intent = UCrop.of(sourceUri, destUri)
+            .withOptions(UCrop.Options().apply {
+                setFreeStyleCropEnabled(true)
+                setCompressionQuality(75)
+                setMaxBitmapSize(1024)
+            })
+            .getIntent(this)
+        cropLauncher.launch(intent)
     }
 
     private fun setTypeSelected(type: String) {
@@ -103,39 +126,11 @@ class ComposeMessageActivity : AppCompatActivity() {
         finish()
     }
 
-    private fun saveAndPreviewImage(uri: Uri) {
-        try {
-            val stream = contentResolver.openInputStream(uri) ?: return
-            val original = BitmapFactory.decodeStream(stream)
-            stream.close()
-
-            val compressed = compressBitmap(original)
-            val msgId = "tmp_${System.currentTimeMillis()}"
-            val outDir = File(filesDir, "images").also { it.mkdirs() }
-            val outFile = File(outDir, "$msgId.jpg")
-            FileOutputStream(outFile).use { compressed.compress(Bitmap.CompressFormat.JPEG, 75, it) }
-
-            selectedImagePath = outFile.absolutePath
-            imagePreview.setImageBitmap(compressed)
-            imagePreview.visibility = View.VISIBLE
-            btnRemoveImage.visibility = View.VISIBLE
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
     private fun clearImage() {
         selectedImagePath?.let { File(it).delete() }
         selectedImagePath = null
         imagePreview.setImageDrawable(null)
         imagePreview.visibility = View.GONE
         btnRemoveImage.visibility = View.GONE
-    }
-
-    private fun compressBitmap(src: Bitmap): Bitmap {
-        val maxDim = 1024
-        if (src.width <= maxDim && src.height <= maxDim) return src
-        val ratio = maxDim.toFloat() / maxOf(src.width, src.height)
-        return Bitmap.createScaledBitmap(src, (src.width * ratio).toInt(), (src.height * ratio).toInt(), true)
     }
 }
