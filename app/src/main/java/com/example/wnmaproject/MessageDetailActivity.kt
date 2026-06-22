@@ -126,9 +126,10 @@ class MessageDetailActivity : AppCompatActivity() {
             findViewById<Button>(R.id.btn_detail_maps).setOnClickListener {
                 val label = sender.ifBlank { "Posizione" }
                 val uri = Uri.parse("geo:$lat,$lon?q=$lat,$lon($label)")
-                val mapsIntent = Intent(Intent.ACTION_VIEW, uri)
-                if (mapsIntent.resolveActivity(packageManager) != null) {
-                    startActivity(mapsIntent)
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, uri))
+                } catch (e: android.content.ActivityNotFoundException) {
+                    android.widget.Toast.makeText(this, "Nessuna app mappe installata", android.widget.Toast.LENGTH_SHORT).show()
                 }
             }
         }
