@@ -37,6 +37,10 @@ Messages propagate through the network based on a **Time To Live (TTL)** system:
 *   **Visual TTL Indicator:** Each received message card shows remaining hops with a color-coded badge (green ≥5, orange 2–4, red ≤1).
 *   **Time-Based Expiry:** Messages are automatically purged from both DB and UI based on type and priority: BROADCAST and INFO P1–P2 expire after **6 hours**; INFO P3 and SOS expire after **24 hours**. Expiry applies to all messages including undelivered ones — a stale PENDING message would be discarded by the recipient anyway.
 
+### 🔁 Distributed Message Lifecycle
+*   **Delete & Propagate:** The sender of an INFO message can delete it from the detail screen. The deletion propagates as a `DELETE_MSG` packet through the mesh, removing the message from all nodes and stopping further forwarding.
+*   **Resolve Voting:** Any user can mark a received message as resolved. When **2 distinct users** vote, a `DELETE_MSG` packet is broadcast and the message is removed from all nodes automatically.
+
 ### 🚦 Intelligent Quality of Service (QoS)
 The network implements a tiered priority system in the transmission buffer:
 1.  **SOS Messages:** Absolute precedence. They "jump" to the front of the queue.
@@ -52,7 +56,7 @@ Nodes can assume two distinct roles to optimize network utility:
     *   **Ephemeral Identity:** A new random node name (e.g., `Hiker-A3F9`) is generated each session for privacy — no long-term tracking across treks.
     *   **Mesh Toggle:** Hikers can disable the mesh service from Settings when not in the mountains, preventing unnecessary battery drain and auto-boot.
 *   **Rifugio (Mountain Hut) Role:** Acts as a **High-Priority Safety Gateway**.
-    *   **Fixed Identity:** Rifugio nodes retain a persistent name across reboots so peer devices always recognise them.
+    *   **Custom Name:** Rifugio nodes can set a custom display name (e.g., *"Rifugio Stella Alpina"*) visible to all peers in the mesh. The name persists across reboots.
     *   **Cloud SOS Relay:** Automatically forwards mesh-received SOS messages to **Civil Protection** via HTTP API — exclusively available to Rifugio nodes.
     *   **Relay Confirmation:** A push notification confirms when an SOS has been successfully delivered to Civil Protection.
     *   **SOS Status Management:** Rifugio nodes can mark any SOS (received or self-sent) as **"Preso in carico"** (acknowledged) or **"Risolto"** (resolved). The status update propagates through the entire mesh — all nodes see the card update in real time: orange for acknowledged, green for resolved.
@@ -63,43 +67,58 @@ Nodes can assume two distinct roles to optimize network utility:
 
 ## 📱 User Interface
 
+### ✍️ Message Composer
+A dedicated full-screen activity replaces the old popup dialog:
+- Type selector (INFO / SOS / AVVISO), priority, text and optional description
+- Photo attachment with **interactive crop** (uCrop, free-style) before sending
+- Description and image are hidden in the card preview — visible only in the detail screen
+
 ### 🔔 Tap-to-Detail Notifications
 Incoming message notifications open directly into a full **Message Detail Screen**, displaying:
 - Type/priority badge and delivery status
-- Full message text and optional description
+- Full message text, description, and full-resolution image (no crop)
 - Sender, timestamp, TTL residuo
-- Embedded image (if present)
 - GPS coordinates with a one-tap **"Open in Maps"** button (launches any `geo:` compatible app; graceful fallback if none installed)
+- **Delete** button for own INFO messages (propagated to all mesh nodes)
+- **"Segnala come risolto"** button for received messages (deleted when 2 users vote)
 
 ### 📶 Live Mesh Status Bar
-A status bar above the message tabs shows the current number of connected peers in real time — grey when isolated, green when nodes are reachable.
+A status bar above the message tabs shows the current connection state:
+- Green with peer count when nodes are reachable
+- Grey "nessun nodo" when isolated but service is active
+- Orange prompt to activate the mesh when the service is disabled
 
 ### 🔴 Unread Badge
 The "Received" tab shows a live badge counter for unread incoming messages, reset automatically when the tab is opened.
 
 ### ⚙️ Settings
 *   **Mesh Service Toggle:** Enable or disable the mesh service on demand. When disabled, the service stops immediately and will not restart on next boot — ideal for hikers between treks.
+*   **Node Name:** Rifugio nodes can edit their display name directly from Settings; hikers see their current random session name (read-only).
 *   **Notification Filter:** Choose which message types trigger notifications (All / SOS only / Info only / Disabled).
-*   **Role Switch:** Change between Hiker and Rifugio roles (restarts the mesh service).
+*   **Role Switch:** Change between Hiker and Rifugio roles (restarts the mesh service and refreshes the node name section).
 
 ---
 
-## 🔒 Privacy & Rich Media
+## 🔒 Privacy & Security
 *   **AES-256-GCM Encryption:** All message payloads, including GPS metadata, are encrypted end-to-end. Tamper protection ensures corrupted data is discarded.
 *   **Bandwidth Upgrade:** The app automatically switches from Bluetooth to Wi-Fi Direct when transferring **images** for situational context.
 *   **Ephemeral Hiker Identity:** Random session names (e.g., `Hiker-A3F9`) are regenerated each session, preventing long-term tracking across treks.
-*   **Persistent Rifugio Identity:** Rifugio nodes keep a fixed name stored in SharedPreferences so peers always recognise the gateway.
+*   **No Backup of Identity Data:** Role, node name, and session preferences are excluded from Android cloud backup and device transfer — reinstalling always prompts for a fresh setup.
 
 ---
 
 ## 🛠️ Technical Stack
-*   **Persistence:** Room Database (v6) with automated pruning and TTL-based expiration.
+*   **Persistence:** Room Database with automated pruning, TTL-based expiration, and per-message lifecycle control.
 *   **Location:** Fused Location Provider API with background altitude tracking.
 *   **Reactive UI:** Kotlin SharedFlow/StateFlow bridge between the **Foreground Service** and the UI.
+*   **Image Crop:** uCrop (free-style interactive crop before attachment).
 *   **Wire Protocol:**
     | Header | UUID | Sender | TTL | Type | Priority | FileID | Encrypted GeoBlob |
     | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
     | `MSG` | `uuid` | `name` | `int` | `SOS/INFO` | `1-3` | `long` | `AES-Text+GPS` |
+    | `SOS_STATUS` | `msgId` | `status` | `rifugioName` | — | — | — | — |
+    | `RESOLVE_VOTE` | `msgId` | — | — | — | — | — | — |
+    | `DELETE_MSG` | `msgId` | — | — | — | — | — | — |
 
 ---
 
@@ -108,7 +127,8 @@ The "Received" tab shows a live badge counter for unread incoming messages, rese
 | :--- | :--- |
 | `NEARBY_WIFI_DEVICES` | Wi-Fi Direct scanning (Android 13+) |
 | `BLUETOOTH_SCAN/ADVERTISE` | Peer discovery & BLE Beaconing |
-| `ACCESS_FINE_LOCATION` | Accurate GPS stamping & Altitude |
+| `ACCESS_FINE_LOCATION` | GPS stamping, altitude tracking & SOS coordinates |
+| `POST_NOTIFICATIONS` | Incoming message and SOS relay alerts |
 | `FOREGROUND_SERVICE` | Persistent safety monitoring in background |
 
 ---
