@@ -49,9 +49,10 @@ class ReceivedMessagesFragment : Fragment() {
                                 .thenByDescending { it.ttl >= 6 } // "vicino a te" prima
                                 .thenByDescending { it.timestamp }
                         )
+                    val atBottom = !scroll.canScrollVertically(1)
                     container.removeAllViews()
                     received.forEach { container.addView(buildMessageCard(requireContext(), it)) }
-                    scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+                    if (atBottom) scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
                 }
             }
         }

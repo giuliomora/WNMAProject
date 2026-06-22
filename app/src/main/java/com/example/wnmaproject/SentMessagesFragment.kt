@@ -27,9 +27,10 @@ class SentMessagesFragment : Fragment() {
                     val sent = messages
                         .filter { it.status in listOf("PENDING", "DELIVERED", "ACKNOWLEDGED", "RESOLVED") }
                         .sortedByDescending { it.timestamp }
+                    val atBottom = !scroll.canScrollVertically(1)
                     container.removeAllViews()
                     sent.forEach { container.addView(buildMessageCard(requireContext(), it)) }
-                    scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+                    if (atBottom) scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
                 }
             }
         }

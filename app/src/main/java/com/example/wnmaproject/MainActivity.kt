@@ -34,14 +34,14 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
-        if (MeshServicePrefs.isEnabled(this)) {
-            startForegroundService(Intent(this, TrekMeshService::class.java))
-        }
-
-        // Pulizia DB all'avvio, indipendente dallo stato del servizio
+        // Pulizia DB prima di avviare il servizio, così i messaggi scaduti
+        // non vengono caricati in memoria nemmeno al primo avvio
         lifecycleScope.launch {
             com.example.trekmesh.db.TrekMeshDatabase.getInstance(applicationContext)
                 .messageDao().deleteExpired()
+            if (MeshServicePrefs.isEnabled(this@MainActivity)) {
+                startForegroundService(Intent(this@MainActivity, TrekMeshService::class.java))
+            }
         }
 
         val isDebug = applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
