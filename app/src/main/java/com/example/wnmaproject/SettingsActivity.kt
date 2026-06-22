@@ -66,6 +66,7 @@ class SettingsActivity : AppCompatActivity() {
                 .setPositiveButton("Cambia") { _, _ ->
                     UserRolePrefs.saveRole(this, newRole)
                     updateRoleUI(newRole)
+                    setupNodeNameSection()
                     restartMeshService()
                 }
                 .setNegativeButton("Annulla", null)
