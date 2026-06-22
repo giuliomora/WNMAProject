@@ -6,4 +6,8 @@
     </style>
 
     <style name="Theme.WNMAProject" parent="Base.Theme.WNMAProject" />
+
+    <style name="Theme.UCrop" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowOptOutEdgeToEdgeEnforcement" tools:targetApi="35">true</item>
+    </style>
 </resources>
