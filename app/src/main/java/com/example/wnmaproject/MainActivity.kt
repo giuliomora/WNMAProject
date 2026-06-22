@@ -38,6 +38,12 @@ class MainActivity : AppCompatActivity() {
             startForegroundService(Intent(this, TrekMeshService::class.java))
         }
 
+        // Pulizia DB all'avvio, indipendente dallo stato del servizio
+        lifecycleScope.launch {
+            com.example.trekmesh.db.TrekMeshDatabase.getInstance(applicationContext)
+                .messageDao().deleteExpired()
+        }
+
         val isDebug = applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
 
         val viewPager = findViewById<ViewPager2>(R.id.view_pager)
