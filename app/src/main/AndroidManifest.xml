@@ -58,6 +58,8 @@
         <activity
             android:name="com.yalantis.ucrop.UCropActivity"
             android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize"
+            android:windowOptOutEdgeToEdgeEnforcement="true"
             android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
         <activity
             android:name=".MainActivity"
