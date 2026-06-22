@@ -35,7 +35,7 @@ Messages propagate through the network based on a **Time To Live (TTL)** system:
 *   **Area Broadcasts:** 15 hops (designed to cover wide valleys from a high-altitude gateway).
 *   **Deduplication:** A persistent cache ensures nodes never process or forward the same message twice, preventing "broadcast storms."
 *   **Visual TTL Indicator:** Each received message card shows remaining hops with a color-coded badge (green ≥5, orange 2–4, red ≤1).
-*   **Time-Based Expiry:** Messages are automatically purged from both DB and UI based on type and priority: BROADCAST and INFO P1–P2 expire after **6 hours**; INFO P3 and SOS expire after **24 hours**. Messages still pending delivery are never auto-deleted.
+*   **Time-Based Expiry:** Messages are automatically purged from both DB and UI based on type and priority: BROADCAST and INFO P1–P2 expire after **6 hours**; INFO P3 and SOS expire after **24 hours**. Expiry applies to all messages including undelivered ones — a stale PENDING message would be discarded by the recipient anyway.
 
 ### 🚦 Intelligent Quality of Service (QoS)
 The network implements a tiered priority system in the transmission buffer:
@@ -69,7 +69,7 @@ Incoming message notifications open directly into a full **Message Detail Screen
 - Full message text and optional description
 - Sender, timestamp, TTL residuo
 - Embedded image (if present)
-- GPS coordinates with a one-tap **"Open in Maps"** button (any `geo:` compatible app)
+- GPS coordinates with a one-tap **"Open in Maps"** button (launches any `geo:` compatible app; graceful fallback if none installed)
 
 ### 📶 Live Mesh Status Bar
 A status bar above the message tabs shows the current number of connected peers in real time — grey when isolated, green when nodes are reachable.
