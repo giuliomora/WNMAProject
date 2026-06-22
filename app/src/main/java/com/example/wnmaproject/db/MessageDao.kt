@@ -38,7 +38,7 @@ interface MessageDao {
     suspend fun updateImagePath(id: String, imagePath: String)
 
     @Query("""
-        DELETE FROM messages WHERE status != 'PENDING'
+        DELETE FROM messages WHERE
         AND (
             ttl <= 0
             OR (type = 'BROADCAST' AND timestamp < :sixHoursAgo)
