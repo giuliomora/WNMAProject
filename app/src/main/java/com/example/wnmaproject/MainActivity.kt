@@ -108,22 +108,29 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupMeshStatusUI() {
+        lifecycleScope.launch {
+            TrekMeshBus.peerCount.collect { count ->
+                updateMeshStatusBar(count)
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        updateMeshStatusBar(TrekMeshBus.peerCount.value)
+    }
+
+    private fun updateMeshStatusBar(peerCount: Int) {
         val tv = findViewById<TextView>(R.id.tv_mesh_status)
         if (!MeshServicePrefs.isEnabled(this)) {
             tv.text = "⚙ Attiva la mesh dalle impostazioni per utilizzare l'app"
             tv.setTextColor(0xFFFF9800.toInt())
-            return
-        }
-        lifecycleScope.launch {
-            TrekMeshBus.peerCount.collect { count ->
-                if (count == 0) {
-                    tv.text = "● Mesh: nessun nodo"
-                    tv.setTextColor(0xFF888888.toInt())
-                } else {
-                    tv.text = "● Mesh: $count nodo${if (count > 1) "i" else ""} connesso${if (count > 1) "i" else ""}"
-                    tv.setTextColor(0xFF4CAF50.toInt())
-                }
-            }
+        } else if (peerCount == 0) {
+            tv.text = "● Mesh: nessun nodo"
+            tv.setTextColor(0xFF888888.toInt())
+        } else {
+            tv.text = "● Mesh: $peerCount nodo${if (peerCount > 1) "i" else ""} connesso${if (peerCount > 1) "i" else ""}"
+            tv.setTextColor(0xFF4CAF50.toInt())
         }
     }
 
