@@ -10,8 +10,12 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import java.io.File
+import androidx.lifecycle.lifecycleScope
+import com.example.trekmesh.db.TrekMeshDatabase
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -32,6 +36,7 @@ class MessageDetailActivity : AppCompatActivity() {
         const val EXTRA_LAT       = "msg_lat"
         const val EXTRA_LON       = "msg_lon"
         const val EXTRA_ALT       = "msg_alt"
+        const val EXTRA_IS_OWN    = "msg_is_own"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -50,6 +55,8 @@ class MessageDetailActivity : AppCompatActivity() {
         val lat       = intent.getDoubleExtra(EXTRA_LAT, 0.0)
         val lon       = intent.getDoubleExtra(EXTRA_LON, 0.0)
         val alt       = intent.getDoubleExtra(EXTRA_ALT, 0.0)
+        val isOwn     = intent.getBooleanExtra(EXTRA_IS_OWN, false)
+        val msgId     = intent.getStringExtra(EXTRA_ID) ?: ""
 
         val isSos       = type == "SOS"
         val isBroadcast = type == "BROADCAST"
@@ -129,8 +136,46 @@ class MessageDetailActivity : AppCompatActivity() {
                 try {
                     startActivity(Intent(Intent.ACTION_VIEW, uri))
                 } catch (e: android.content.ActivityNotFoundException) {
-                    android.widget.Toast.makeText(this, "Nessuna app mappe installata", android.widget.Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Nessuna app mappe installata", Toast.LENGTH_SHORT).show()
                 }
+            }
+        }
+
+        // Elimina (solo messaggi INFO inviati da me)
+        val btnDelete = findViewById<Button>(R.id.btn_detail_delete)
+        if (isOwn && type == "INFO") {
+            btnDelete.visibility = View.VISIBLE
+            btnDelete.setOnClickListener {
+                AlertDialog.Builder(this)
+                    .setTitle("Elimina messaggio")
+                    .setMessage("Vuoi eliminare questo messaggio?")
+                    .setPositiveButton("Elimina") { _, _ ->
+                        lifecycleScope.launch {
+                            TrekMeshDatabase.getInstance(applicationContext).messageDao().deleteById(msgId)
+                        }
+                        TrekMeshBus.deleteMessageById(msgId)
+                        finish()
+                    }
+                    .setNegativeButton("Annulla", null)
+                    .show()
+            }
+        }
+
+        // Segnala risolto (messaggi ricevuti)
+        val btnResolve = findViewById<Button>(R.id.btn_detail_resolve)
+        if (!isOwn) {
+            btnResolve.visibility = View.VISIBLE
+            btnResolve.setOnClickListener {
+                AlertDialog.Builder(this)
+                    .setTitle("Segnala come risolto")
+                    .setMessage("Quando 2 utenti segnalano il messaggio come risolto, verrà eliminato dalla rete.")
+                    .setPositiveButton("Segnala") { _, _ ->
+                        TrekMeshBus.sendResolveVote(msgId)
+                        Toast.makeText(this, "Segnalazione inviata", Toast.LENGTH_SHORT).show()
+                        finish()
+                    }
+                    .setNegativeButton("Annulla", null)
+                    .show()
             }
         }
     }

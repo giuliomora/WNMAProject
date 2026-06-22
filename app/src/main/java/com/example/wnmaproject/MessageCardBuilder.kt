@@ -28,6 +28,7 @@ fun buildMessageCard(context: Context, msg: ChatMessage): View {
             putExtra(MessageDetailActivity.EXTRA_LAT,       msg.lat)
             putExtra(MessageDetailActivity.EXTRA_LON,       msg.lon)
             putExtra(MessageDetailActivity.EXTRA_ALT,       msg.alt)
+            putExtra(MessageDetailActivity.EXTRA_IS_OWN,    isOwn)
         })
     }
     val isOwn  = msg.label == "Tu"

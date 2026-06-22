@@ -75,7 +75,9 @@ class TrekMeshService : Service() {
         private const val TYPE_MSG = "MSG"
         private const val TYPE_ACK = "ACK"
         private const val TYPE_BROADCAST = "BROADCAST"
-        private const val TYPE_SOS_STATUS = "SOS_STATUS"
+        private const val TYPE_SOS_STATUS  = "SOS_STATUS"
+        private const val TYPE_RESOLVE_VOTE = "RESOLVE_VOTE"
+        private const val TYPE_DELETE_MSG   = "DELETE_MSG"
         private const val FIELD_SEP = "" // ASCII Unit Separator
 
         private const val SCAN_LOW_POWER_MS = 3 * 60 * 1000L // 3 minuti solo BT
@@ -266,9 +268,11 @@ class TrekMeshService : Service() {
                 Payload.Type.BYTES -> {
                     val raw = String(payload.asBytes() ?: return, Charsets.UTF_8)
                     when (raw.substringBefore("|")) {
-                        TYPE_MSG        -> handleIncomingMessage(endpointId, raw)
-                        TYPE_ACK        -> handleIncomingAck(raw)
-                        TYPE_SOS_STATUS -> handleIncomingSosStatus(endpointId, raw)
+                        TYPE_MSG         -> handleIncomingMessage(endpointId, raw)
+                        TYPE_ACK         -> handleIncomingAck(raw)
+                        TYPE_SOS_STATUS  -> handleIncomingSosStatus(endpointId, raw)
+                        TYPE_RESOLVE_VOTE -> handleResolveVote(endpointId, raw)
+                        TYPE_DELETE_MSG  -> handleDeleteMsg(endpointId, raw)
                         else -> Log.w(LOG_TAG, "Tipo sconosciuto da $endpointId")
                     }
                 }
@@ -484,6 +488,7 @@ class TrekMeshService : Service() {
 
         listenForOutgoingMessages()
         listenForSosStatusUpdates()
+        listenForResolveVotes()
         listenForSafetyActions()
         startPeriodicCleanup()
         startBleBeaconing()
@@ -506,6 +511,54 @@ class TrekMeshService : Service() {
                     ))
                 }
                 delay(WEATHER_RELAY_INTERVAL_MS)
+            }
+        }
+    }
+
+    private fun handleResolveVote(endpointId: String, raw: String) {
+        val msgId = raw.substringAfter("|")
+        val prefs = getSharedPreferences("trekmesh_votes", MODE_PRIVATE)
+        val count = prefs.getInt(msgId, 0) + 1
+        prefs.edit().putInt(msgId, count).apply()
+        if (count >= 2) {
+            serviceScope.launch { db.messageDao().deleteById(msgId) }
+            TrekMeshBus.deleteMessageById(msgId)
+            val delWire = "$TYPE_DELETE_MSG|$msgId"
+            val payload = Payload.fromBytes(delWire.toByteArray(Charsets.UTF_8))
+            (connectedEndpoints - endpointId).forEach { connectionsClient.sendPayload(it, payload) }
+        } else {
+            val forward = "$TYPE_RESOLVE_VOTE|$msgId"
+            val payload = Payload.fromBytes(forward.toByteArray(Charsets.UTF_8))
+            (connectedEndpoints - endpointId).forEach { connectionsClient.sendPayload(it, payload) }
+        }
+    }
+
+    private fun handleDeleteMsg(endpointId: String, raw: String) {
+        val msgId = raw.substringAfter("|")
+        serviceScope.launch { db.messageDao().deleteById(msgId) }
+        TrekMeshBus.deleteMessageById(msgId)
+        val forward = "$TYPE_DELETE_MSG|$msgId"
+        val payload = Payload.fromBytes(forward.toByteArray(Charsets.UTF_8))
+        (connectedEndpoints - endpointId).forEach { connectionsClient.sendPayload(it, payload) }
+    }
+
+    private fun listenForResolveVotes() {
+        serviceScope.launch {
+            TrekMeshBus.resolveVotes.collect { msgId ->
+                val prefs = getSharedPreferences("trekmesh_votes", MODE_PRIVATE)
+                val count = prefs.getInt(msgId, 0) + 1
+                prefs.edit().putInt(msgId, count).apply()
+                if (count >= 2) {
+                    serviceScope.launch { db.messageDao().deleteById(msgId) }
+                    TrekMeshBus.deleteMessageById(msgId)
+                    val wire = "$TYPE_DELETE_MSG|$msgId"
+                    val payload = Payload.fromBytes(wire.toByteArray(Charsets.UTF_8))
+                    connectedEndpoints.forEach { connectionsClient.sendPayload(it, payload) }
+                } else {
+                    val wire = "$TYPE_RESOLVE_VOTE|$msgId"
+                    val payload = Payload.fromBytes(wire.toByteArray(Charsets.UTF_8))
+                    connectedEndpoints.forEach { connectionsClient.sendPayload(it, payload) }
+                }
             }
         }
     }

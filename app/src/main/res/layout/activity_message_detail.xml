@@ -178,5 +178,25 @@
 
         </LinearLayout>
 
+        <!-- Elimina (INFO inviati) -->
+        <Button
+            android:id="@+id/btn_detail_delete"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="Elimina messaggio"
+            android:backgroundTint="#B71C1C"
+            android:visibility="gone" />
+
+        <!-- Segnala risolto (messaggi ricevuti) -->
+        <Button
+            android:id="@+id/btn_detail_resolve"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="Segnala come risolto"
+            android:backgroundTint="#388E3C"
+            android:visibility="gone" />
+
     </LinearLayout>
 </ScrollView>

@@ -61,6 +61,19 @@ object TrekMeshBus {
         _sosStatusUpdates.tryEmit(SosStatusUpdate(msgId, status, rifugioName))
     }
 
+    private val _resolveVotes = MutableSharedFlow<String>(extraBufferCapacity = 16)
+    val resolveVotes = _resolveVotes.asSharedFlow()
+
+    private val _deleteMessage = MutableSharedFlow<String>(extraBufferCapacity = 16)
+    val deleteMessage = _deleteMessage.asSharedFlow()
+
+    fun sendResolveVote(msgId: String) { _resolveVotes.tryEmit(msgId) }
+
+    fun deleteMessageById(msgId: String) {
+        _messages.update { it.filter { m -> m.id != msgId } }
+        _deleteMessage.tryEmit(msgId)
+    }
+
     fun emitLog(message: String) {
         _logs.update { it + message }
     }
