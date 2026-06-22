@@ -5,7 +5,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
-import android.widget.ScrollView
+import androidx.core.widget.NestedScrollView
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -23,7 +23,7 @@ class ReceivedMessagesFragment : Fragment() {
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        val scroll = view.findViewById<ScrollView>(R.id.scroll_messages)
+        val scroll = view.findViewById<NestedScrollView>(R.id.scroll_messages)
         val container = view.findViewById<LinearLayout>(R.id.container_messages)
 
         viewLifecycleOwner.lifecycleScope.launch {

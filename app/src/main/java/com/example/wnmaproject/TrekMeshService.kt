@@ -474,8 +474,8 @@ class TrekMeshService : Service() {
                     ttl = e.ttl,
                     timestamp = e.timestamp
                 )
-                if (e.status == "DELIVERED") {
-                    TrekMeshBus.updateMessageStatus(e.id, "DELIVERED")
+                if (e.status !in listOf("PENDING", "RECEIVED")) {
+                    TrekMeshBus.updateMessageStatus(e.id, e.status)
                 }
             }
         }
