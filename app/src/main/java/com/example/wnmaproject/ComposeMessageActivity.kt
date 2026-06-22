@@ -10,6 +10,8 @@ import android.widget.ImageView
 import android.widget.RadioGroup
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.yalantis.ucrop.UCrop
 import java.io.File
 
@@ -50,6 +52,12 @@ class ComposeMessageActivity : AppCompatActivity() {
         supportActionBar?.apply {
             title = "Nuovo messaggio"
             setDisplayHomeAsUpEnabled(true)
+        }
+
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.compose_root)) { v, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            insets
         }
 
         btnTypeInfo      = findViewById(R.id.btn_type_info)
