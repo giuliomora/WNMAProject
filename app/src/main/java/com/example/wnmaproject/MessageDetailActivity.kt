@@ -148,7 +148,7 @@ class MessageDetailActivity : AppCompatActivity() {
             btnDelete.setOnClickListener {
                 AlertDialog.Builder(this)
                     .setTitle("Elimina messaggio")
-                    .setMessage("Vuoi eliminare questo messaggio?")
+                    .setMessage("Vuoi eliminare questo messaggio? Verrà rimosso anche dai dispositivi degli altri utenti nella rete.")
                     .setPositiveButton("Elimina") { _, _ ->
                         lifecycleScope.launch {
                             TrekMeshDatabase.getInstance(applicationContext).messageDao().deleteById(msgId)
