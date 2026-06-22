@@ -12,6 +12,8 @@ import android.widget.TextView
 private const val INITIAL_TTL = 7
 
 fun buildMessageCard(context: Context, msg: ChatMessage): View {
+    val isOwn  = msg.label == "Tu"
+
     // Click apre il dettaglio
     fun openDetail() {
         context.startActivity(Intent(context, MessageDetailActivity::class.java).apply {
@@ -31,7 +33,6 @@ fun buildMessageCard(context: Context, msg: ChatMessage): View {
             putExtra(MessageDetailActivity.EXTRA_IS_OWN,    isOwn)
         })
     }
-    val isOwn  = msg.label == "Tu"
     val isSos  = msg.type == "SOS"
     val isBroadcast = msg.type == "BROADCAST"
     val isNearby = !isOwn && isSos && msg.ttl == INITIAL_TTL - 1
