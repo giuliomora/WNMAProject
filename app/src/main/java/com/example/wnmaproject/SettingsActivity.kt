@@ -2,6 +2,7 @@ package com.example.trekmesh
 
 import android.os.Bundle
 import android.widget.Button
+import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.RadioGroup
 import android.widget.TextView
@@ -19,6 +20,7 @@ class SettingsActivity : AppCompatActivity() {
 
         setupMeshServiceSection()
         setupRoleSection()
+        setupNodeNameSection()
         setupNotificationSection()
     }
 
@@ -89,6 +91,44 @@ class SettingsActivity : AppCompatActivity() {
         val intent = android.content.Intent(this, TrekMeshService::class.java)
         stopService(intent)
         startForegroundService(intent)
+    }
+
+    private fun setupNodeNameSection() {
+        val tvName = findViewById<TextView>(R.id.tv_node_name)
+        val btnEdit = findViewById<Button>(R.id.btn_edit_name)
+        val role = UserRolePrefs.getRole(this) ?: UserRole.HIKER
+
+        if (role == UserRole.RIFUGIO) {
+            val name = UserRolePrefs.getStoredRifugioName(this) ?: "Rifugio"
+            tvName.text = name
+            btnEdit.visibility = android.view.View.VISIBLE
+            btnEdit.setOnClickListener { showEditNameDialog(tvName) }
+        } else {
+            val randomName = getSharedPreferences("trekmesh_node", MODE_PRIVATE)
+                .getString("hiker_session_name", null) ?: "Hiker (generato all'avvio)"
+            tvName.text = randomName
+            tvName.setTextColor(0xFF888888.toInt())
+        }
+    }
+
+    private fun showEditNameDialog(tvName: TextView) {
+        val input = EditText(this).apply {
+            setText(tvName.text)
+            hint = "Nome rifugio"
+            setPadding(48, 32, 48, 32)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Modifica nome")
+            .setView(input)
+            .setPositiveButton("Salva") { _, _ ->
+                val newName = input.text.toString().trim().ifBlank { return@setPositiveButton }
+                getSharedPreferences("trekmesh_node", MODE_PRIVATE)
+                    .edit().putString("rifugio_name", newName).apply()
+                tvName.text = newName
+                restartMeshService()
+            }
+            .setNegativeButton("Annulla", null)
+            .show()
     }
 
     private fun setupNotificationSection() {
