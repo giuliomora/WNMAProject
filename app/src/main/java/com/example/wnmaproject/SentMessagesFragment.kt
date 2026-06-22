@@ -24,8 +24,20 @@ class SentMessagesFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 TrekMeshBus.messages.collect { messages ->
+                    val now = System.currentTimeMillis()
+                    val sixH = now - 6 * 60 * 60 * 1000L
+                    val twentyFourH = now - 24 * 60 * 60 * 1000L
                     val sent = messages
-                        .filter { it.status in listOf("PENDING", "DELIVERED", "ACKNOWLEDGED", "RESOLVED") }
+                        .filter { msg ->
+                            if (msg.status !in listOf("PENDING", "DELIVERED", "ACKNOWLEDGED", "RESOLVED")) return@filter false
+                            when {
+                                msg.type == "BROADCAST" -> msg.timestamp > sixH
+                                msg.type == "INFO" && msg.priority < 3 -> msg.timestamp > sixH
+                                msg.type == "INFO" && msg.priority >= 3 -> msg.timestamp > twentyFourH
+                                msg.type == "SOS" -> msg.timestamp > twentyFourH
+                                else -> true
+                            }
+                        }
                         .sortedByDescending { it.timestamp }
                     val atBottom = !scroll.canScrollVertically(1)
                     container.removeAllViews()
