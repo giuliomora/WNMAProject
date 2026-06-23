@@ -34,12 +34,9 @@ class SettingsActivity : AppCompatActivity() {
         switch.setOnCheckedChangeListener { _, isChecked ->
             MeshServicePrefs.setEnabled(this, isChecked)
             updateServiceStatusUI(statusText, isChecked)
-            val serviceIntent = android.content.Intent(this, TrekMeshService::class.java)
-            if (isChecked) {
-                startForegroundService(serviceIntent)
-            } else {
-                stopService(serviceIntent)
-            }
+            // Il servizio rimane sempre attivo per il monitoraggio passivo BLE.
+            // onStartCommand rileva lo stato e avvia/ferma Nearby di conseguenza.
+            startForegroundService(android.content.Intent(this, TrekMeshService::class.java))
         }
     }
 
@@ -89,9 +86,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun restartMeshService() {
-        val intent = android.content.Intent(this, TrekMeshService::class.java)
-        stopService(intent)
-        startForegroundService(intent)
+        startForegroundService(android.content.Intent(this, TrekMeshService::class.java))
     }
 
     private fun setupNodeNameSection() {

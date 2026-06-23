@@ -768,6 +768,17 @@ class TrekMeshService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         createNotificationChannel()
+        updateForegroundNotification()
+        if (MeshServicePrefs.isEnabled(this)) {
+            startAdaptiveScanning()
+        } else {
+            stopNearby()
+            TrekMeshBus.emitLog("Mesh disattivata — monitoraggio passivo SOS BLE attivo")
+        }
+        return START_STICKY
+    }
+
+    private fun updateForegroundNotification() {
         val notification = createNotification()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(NOTIFICATION_ID, notification,
@@ -775,8 +786,21 @@ class TrekMeshService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
-        startAdaptiveScanning()
-        return START_STICKY
+        getSystemService(NotificationManager::class.java)?.notify(NOTIFICATION_ID, notification)
+    }
+
+    private fun stopNearby() {
+        adaptiveScanJob?.cancel()
+        adaptiveScanJob = null
+        try {
+            connectionsClient.stopAdvertising()
+            connectionsClient.stopDiscovery()
+            connectionsClient.stopAllEndpoints()
+        } catch (e: Exception) {
+            Log.w(LOG_TAG, "stopNearby: ${e.message}")
+        }
+        connectedEndpoints.clear()
+        TrekMeshBus.updatePeerCount(0)
     }
 
     private fun listenForOutgoingMessages() {
@@ -1127,14 +1151,20 @@ class TrekMeshService : Service() {
         nm.notify(NOTIFICATION_ALERT_BASE_ID - 1, notification)
     }
 
-    private fun createNotification(): Notification =
-        NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+    private fun createNotification(): Notification {
+        val meshEnabled = MeshServicePrefs.isEnabled(this)
+        val text = if (meshEnabled)
+            "Mesh attiva — rete P2P in ascolto"
+        else
+            "Monitoraggio passivo SOS attivo (mesh disattivata)"
+        return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setContentTitle("TrekMesh")
-            .setContentText("TrekMesh sta proteggendo la tua escursione")
+            .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .build()
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
