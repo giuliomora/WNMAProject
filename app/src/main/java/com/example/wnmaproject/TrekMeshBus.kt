@@ -139,4 +139,22 @@ object TrekMeshBus {
     fun sendMessage(msg: OutgoingMessage) {
         _outgoing.tryEmit(msg)
     }
+
+    // ── Benchmark ──────────────────────────────────────────────────────────────
+
+    private val _benchmarkLog = MutableStateFlow<List<String>>(emptyList())
+    val benchmarkLog = _benchmarkLog.asStateFlow()
+
+    private val _benchPingTrigger = MutableSharedFlow<Int>(extraBufferCapacity = 1)
+    val benchPingTrigger = _benchPingTrigger.asSharedFlow()
+
+    fun emitBench(msg: String) {
+        val ts = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.getDefault())
+            .format(java.util.Date())
+        _benchmarkLog.update { it + "[$ts] $msg" }
+    }
+
+    fun clearBenchLog() { _benchmarkLog.value = emptyList() }
+
+    fun triggerBenchPing(count: Int) { _benchPingTrigger.tryEmit(count) }
 }

@@ -51,10 +51,11 @@ class MainActivity : AppCompatActivity() {
 
         TabLayoutMediator(tabLayout, viewPager) { tab, position ->
             tab.text = when {
-                position == 0 -> "Received"
-                position == 1 -> "Sent"
-                isDebug && position == 2 -> "Log"
-                else -> "Settings"
+                position == 0              -> "Received"
+                position == 1              -> "Sent"
+                isDebug && position == 2   -> "Log"
+                isDebug && position == 3   -> "Bench"
+                else                       -> "Settings"
             }
         }.attach()
 

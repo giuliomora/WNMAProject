@@ -63,4 +63,7 @@ interface MessageDao {
         )
     """)
     suspend fun pruneOldest(maxSize: Int)
+
+    @Query("SELECT COUNT(*) FROM messages")
+    suspend fun count(): Int
 }

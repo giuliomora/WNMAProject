@@ -79,6 +79,8 @@ class TrekMeshService : Service() {
         private const val TYPE_RESOLVE_VOTE = "RESOLVE_VOTE"
         private const val TYPE_DELETE_MSG   = "DELETE_MSG"
         private const val TYPE_ENCOUNTERS    = "ENCOUNTERS"
+        private const val TYPE_BENCH_PING    = "BENCH_PING"
+        private const val TYPE_BENCH_PONG    = "BENCH_PONG"
         private const val FIELD_SEP = "" // ASCII Unit Separator
 
         private const val SCAN_LOW_POWER_MS = 3 * 60 * 1000L // 3 minuti solo BT
@@ -166,6 +168,11 @@ class TrekMeshService : Service() {
         }
     }
 
+    // Benchmark: reconnection timing (name -> disconnectedAt ms)
+    private val disconnectedAt = mutableMapOf<String, Long>()
+    // Benchmark: incoming BENCH_PING counters (testId -> received count)
+    private val benchPingCounts = mutableMapOf<String, Int>()
+
     private val connectedEndpoints = java.util.concurrent.CopyOnWriteArraySet<String>()
     private val connectionRetries = mutableMapOf<String, Int>()
     private val pendingEndpoints = mutableSetOf<String>()
@@ -208,6 +215,10 @@ class TrekMeshService : Service() {
                 TrekMeshBus.updatePeerCount(connectedEndpoints.size)
                 TrekMeshBus.emitLog("Connected to $name")
                 BenchmarkLogger.stop("discovery:$name")
+                disconnectedAt.remove(name)?.let { lostAt ->
+                    val reconnectMs = System.currentTimeMillis() - lostAt
+                    BenchmarkLogger.log("RECONNECT_OK name=$name elapsed=${reconnectMs}ms")
+                }
                 val loc = currentLastLocation
                 val myRole = UserRolePrefs.getRole(this@TrekMeshService) ?: UserRole.HIKER
                 // Rifugios log hikers they meet; hikers log everyone except rifugios (uploaded separately)
@@ -249,6 +260,8 @@ class TrekMeshService : Service() {
             endpointNames.remove(endpointId)
             TrekMeshBus.updatePeerCount(connectedEndpoints.size)
             TrekMeshBus.emitLog("Disconnected from $name")
+            disconnectedAt[name] = System.currentTimeMillis()
+            BenchmarkLogger.log("RECONNECT_LOST name=$name ts=${System.currentTimeMillis()}")
         }
     }
 
@@ -259,6 +272,8 @@ class TrekMeshService : Service() {
         ) {
             if (endpointId in connectedEndpoints || endpointId in pendingEndpoints) return
             if (endpointNames.values.contains(info.endpointName)) return
+            val mode = if (currentScanMode == ScanMode.HIGH_POWER) "HIGH_POWER" else "LOW_POWER"
+            BenchmarkLogger.log("ENDPOINT_FOUND name=${info.endpointName} mode=$mode ts=${System.currentTimeMillis()}")
             TrekMeshBus.emitLog("Device found: ${info.endpointName}, requesting connection...")
             pendingEndpoints.add(endpointId)
             endpointNames[endpointId] = info.endpointName
@@ -288,6 +303,8 @@ class TrekMeshService : Service() {
                         TYPE_RESOLVE_VOTE -> handleResolveVote(endpointId, raw)
                         TYPE_DELETE_MSG  -> handleDeleteMsg(endpointId, raw)
                         TYPE_ENCOUNTERS  -> handleIncomingEncounters(endpointId, raw)
+                        TYPE_BENCH_PING  -> handleBenchPing(endpointId, raw)
+                        TYPE_BENCH_PONG  -> handleBenchPong(raw)
                         else -> Log.w(LOG_TAG, "Tipo sconosciuto da $endpointId")
                     }
                 }
@@ -509,6 +526,7 @@ class TrekMeshService : Service() {
         listenForResolveVotes()
         listenForDeleteMessages()
         listenForSafetyActions()
+        listenForBenchPingTrigger()
         startPeriodicCleanup()
         startBleBeaconing()
         
@@ -972,9 +990,13 @@ class TrekMeshService : Service() {
         serviceScope.launch {
             while (isActive) {
                 delay(CLEANUP_INTERVAL_MS)
+                val before = db.messageDao().count()
                 db.messageDao().deleteExpired()
                 db.messageDao().pruneOldest(MAX_BUFFER_SIZE)
-                Log.d(LOG_TAG, "Cleanup periodico eseguito")
+                val after = db.messageDao().count()
+                val removed = before - after
+                Log.d(LOG_TAG, "Cleanup: removed $removed messages, remaining $after")
+                BenchmarkLogger.log("CLEANUP: before=$before removed=$removed remaining=$after ts=${System.currentTimeMillis()}")
             }
         }
     }
@@ -1016,6 +1038,61 @@ class TrekMeshService : Service() {
         TrekMeshBus.emitLog("📋 Registry updated with encounters from $sender")
     }
 
+    // ── Benchmark functions ────────────────────────────────────────────────────
+
+    private fun handleBenchPing(endpointId: String, raw: String) {
+        // BENCH_PING|testId|seq|total
+        val parts = raw.split("|", limit = 4)
+        if (parts.size < 4) return
+        val testId = parts[1]
+        val seq = parts[2].toIntOrNull() ?: return
+        val total = parts[3].toIntOrNull() ?: return
+        val newCount = (benchPingCounts[testId] ?: 0) + 1
+        benchPingCounts[testId] = newCount
+        Log.d(LOG_TAG, "BENCH_PING $seq/$total (received $newCount)")
+        // Send PONG when last ping arrives or all expected received
+        if (seq == total - 1 || newCount == total) {
+            val pong = "$TYPE_BENCH_PONG|$testId|$newCount|$total"
+            connectionsClient.sendPayload(endpointId, Payload.fromBytes(pong.toByteArray(Charsets.UTF_8)))
+            benchPingCounts.remove(testId)
+        }
+    }
+
+    private fun handleBenchPong(raw: String) {
+        // BENCH_PONG|testId|received|total
+        val parts = raw.split("|", limit = 4)
+        if (parts.size < 4) return
+        val testId = parts[1]
+        val received = parts[2].toIntOrNull() ?: return
+        val total = parts[3].toIntOrNull() ?: return
+        val lost = total - received
+        val pct = if (total > 0) received * 100 / total else 0
+        BenchmarkLogger.log("PACKET_LOSS RESULT testId=${testId.take(8)} received=$received/$total ($pct%) lost=$lost")
+    }
+
+    private fun listenForBenchPingTrigger() {
+        serviceScope.launch {
+            TrekMeshBus.benchPingTrigger.collect { total ->
+                if (connectedEndpoints.isEmpty()) {
+                    BenchmarkLogger.log("PACKET_LOSS ABORTED: no connected peers")
+                    return@collect
+                }
+                val testId = java.util.UUID.randomUUID().toString().take(8)
+                BenchmarkLogger.log("PACKET_LOSS START testId=$testId total=$total peers=${connectedEndpoints.size}")
+                BenchmarkLogger.logBattery(this@TrekMeshService)
+                val startMs = System.currentTimeMillis()
+                repeat(total) { seq ->
+                    val wire = "$TYPE_BENCH_PING|$testId|$seq|$total"
+                    val payload = Payload.fromBytes(wire.toByteArray(Charsets.UTF_8))
+                    connectedEndpoints.forEach { connectionsClient.sendPayload(it, payload) }
+                    delay(20) // 50 msg/sec max send rate
+                }
+                val sendMs = System.currentTimeMillis() - startMs
+                BenchmarkLogger.log("PACKET_LOSS SENT $total pings in ${sendMs}ms (waiting for PONG...)")
+            }
+        }
+    }
+
     private fun startAdaptiveScanning() {
         adaptiveScanJob?.cancel()
         adaptiveScanJob = serviceScope.launch {
@@ -1055,6 +1132,8 @@ class TrekMeshService : Service() {
     }
 
     private fun startNetworking(highPower: Boolean) {
+        val mode = if (highPower) "HIGH_POWER(BT+WiFi)" else "LOW_POWER(BT)"
+        BenchmarkLogger.log("SCAN_START mode=$mode ts=${System.currentTimeMillis()}")
         connectionsClient.stopAdvertising()
         connectionsClient.stopDiscovery()
 
