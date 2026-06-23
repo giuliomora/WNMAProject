@@ -5,22 +5,23 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
-import android.widget.FrameLayout
-import android.widget.ImageButton
-import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.viewpager2.widget.ViewPager2
+import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.tabs.TabLayout
-import com.google.android.material.tabs.TabLayoutMediator
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
+
+    private var isHandlingSettingsTab = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -28,7 +29,6 @@ class MainActivity : AppCompatActivity() {
 
         setupSafetyTimerUI()
         setupMeshStatusUI()
-        setupUnreadBadge()
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -51,37 +51,69 @@ class MainActivity : AppCompatActivity() {
 
         viewPager.adapter = MessagesPagerAdapter(this, showLog = isDebug)
 
-        TabLayoutMediator(tabLayout, viewPager) { tab, position ->
-            tab.text = when (position) {
-                0    -> "Received"
-                1    -> "Sent"
-                else -> "Log"
+        // Build tabs manually so we can add Settings as a pseudo-tab
+        val contentTabCount = if (isDebug) 3 else 2
+        val settingsTabIndex = contentTabCount
+
+        tabLayout.addTab(tabLayout.newTab().setText("Received"))
+        tabLayout.addTab(tabLayout.newTab().setText("Sent"))
+        if (isDebug) tabLayout.addTab(tabLayout.newTab().setText("Log"))
+        tabLayout.addTab(
+            tabLayout.newTab()
+                .setIcon(ContextCompat.getDrawable(this, android.R.drawable.ic_menu_preferences))
+                .setContentDescription("Settings")
+        )
+
+        // ViewPager → TabLayout
+        viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
+            override fun onPageSelected(position: Int) {
+                if (!isHandlingSettingsTab) {
+                    tabLayout.selectTab(tabLayout.getTabAt(position))
+                }
             }
-        }.attach()
+        })
 
-        // Settings icon in tab bar
-        findViewById<ImageButton>(R.id.btn_settings_tab).setOnClickListener {
-            startActivity(Intent(this, SettingsActivity::class.java))
-        }
+        // TabLayout → ViewPager (Settings tab intercept)
+        tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
+            override fun onTabSelected(tab: TabLayout.Tab) {
+                if (isHandlingSettingsTab) return
+                if (tab.position == settingsTabIndex) {
+                    isHandlingSettingsTab = true
+                    tabLayout.selectTab(tabLayout.getTabAt(viewPager.currentItem))
+                    isHandlingSettingsTab = false
+                    startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
+                } else {
+                    viewPager.currentItem = tab.position
+                }
+            }
+            override fun onTabUnselected(tab: TabLayout.Tab) {}
+            override fun onTabReselected(tab: TabLayout.Tab) {
+                if (tab.position == settingsTabIndex) {
+                    startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
+                }
+            }
+        })
 
-        // SEND button
-        findViewById<LinearLayout>(R.id.btn_send_msg).setOnClickListener {
+        setupUnreadBadge(tabLayout)
+
+        // SEND FAB
+        findViewById<ExtendedFloatingActionButton>(R.id.fab_compose).setOnClickListener {
             startActivity(Intent(this, ComposeMessageActivity::class.java))
         }
 
-        // SOS button
-        val btnSos = findViewById<LinearLayout>(R.id.btn_sos)
-        btnSos.setOnClickListener { showSosConfirmDialog() }
-        btnSos.setOnLongClickListener {
+        // SOS FAB
+        val fabSos = findViewById<ExtendedFloatingActionButton>(R.id.fab_sos)
+        fabSos.setOnClickListener { showSosConfirmDialog() }
+        fabSos.setOnLongClickListener {
             showSafetyTimerDialog()
             true
         }
 
-        // Debug reset button
-        val resetBtn = findViewById<FrameLayout>(R.id.fab_debug_reset)
+        // Debug reset FAB
+        val fabReset = findViewById<FloatingActionButton>(R.id.fab_debug_reset)
         if (isDebug) {
-            resetBtn.visibility = View.VISIBLE
-            resetBtn.setOnClickListener {
+            fabReset.visibility = View.VISIBLE
+            fabReset.setOnClickListener {
                 AlertDialog.Builder(this)
                     .setTitle("[DEBUG] Reset application")
                     .setMessage("All data (database, preferences) will be deleted and all permissions revoked. The app will close.")
@@ -94,8 +126,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupUnreadBadge() {
-        val tabLayout = findViewById<TabLayout>(R.id.tab_layout)
+    private fun setupUnreadBadge(tabLayout: TabLayout) {
         lifecycleScope.launch {
             TrekMeshBus.unreadCount.collect { count ->
                 val badge = tabLayout.getTabAt(0)?.orCreateBadge

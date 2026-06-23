@@ -1,211 +1,145 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
+<androidx.coordinatorlayout.widget.CoordinatorLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/main"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical">
+    android:layout_height="match_parent">
 
-    <!-- Safety timer banner -->
-    <com.google.android.material.card.MaterialCardView
-        android:id="@+id/card_safety_timer"
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_margin="8dp"
-        android:visibility="gone"
-        app:cardBackgroundColor="#FFE082"
-        app:cardCornerRadius="8dp"
-        app:strokeWidth="1dp"
-        app:strokeColor="#FFB300">
+        android:layout_height="match_parent"
+        android:orientation="vertical">
 
+        <!-- Safety timer banner -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_safety_timer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_margin="8dp"
+            android:visibility="gone"
+            app:cardBackgroundColor="#FFE082"
+            app:cardCornerRadius="8dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="#FFB300">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="12dp">
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:contentDescription="Timer icon"
+                    app:srcCompat="@android:drawable/ic_lock_idle_alarm"
+                    app:tint="#BF360C" />
+
+                <TextView
+                    android:id="@+id/text_safety_timer"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="12dp"
+                    android:text="Check-in in: --:--"
+                    android:textColor="#BF360C"
+                    android:textStyle="bold" />
+
+                <Button
+                    android:id="@+id/btn_safety_ok"
+                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="I\'M OK"
+                    android:textColor="#BF360C" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Mesh status bar -->
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical"
+            android:layout_height="36dp"
             android:orientation="horizontal"
-            android:padding="12dp">
-
-            <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:contentDescription="Timer icon"
-                app:srcCompat="@android:drawable/ic_lock_idle_alarm"
-                app:tint="#BF360C" />
+            android:gravity="center_vertical"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:background="#1A1A1A">
 
             <TextView
-                android:id="@+id/text_safety_timer"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginStart="12dp"
-                android:text="Check-in in: --:--"
-                android:textColor="#BF360C"
-                android:textStyle="bold" />
-
-            <Button
-                android:id="@+id/btn_safety_ok"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:id="@+id/tv_mesh_status"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="I\'M OK"
-                android:textColor="#BF360C" />
+                android:text="● Mesh: no nodes"
+                android:textSize="12sp"
+                android:textColor="#888888" />
         </LinearLayout>
-    </com.google.android.material.card.MaterialCardView>
 
-    <!-- Mesh status bar -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="36dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingStart="12dp"
-        android:paddingEnd="12dp"
-        android:background="#1A1A1A">
-
-        <TextView
-            android:id="@+id/tv_mesh_status"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="● Mesh: no nodes"
-            android:textSize="12sp"
-            android:textColor="#888888" />
-    </LinearLayout>
-
-    <!-- Tab bar + Settings icon -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:background="#1E1E1E">
-
+        <!-- Tab bar (includes Settings as last tab, managed in code) -->
         <com.google.android.material.tabs.TabLayout
             android:id="@+id/tab_layout"
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             app:tabGravity="fill"
             app:tabMode="fixed"
-            app:tabBackground="@android:color/transparent"
             app:tabTextColor="#888888"
             app:tabSelectedTextColor="#FFFFFF"
             app:tabIndicatorColor="#4CAF50" />
 
-        <ImageButton
-            android:id="@+id/btn_settings_tab"
-            android:layout_width="52dp"
-            android:layout_height="52dp"
-            android:src="@android:drawable/ic_menu_preferences"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Settings"
-            android:tint="#AAAAAA"
-            android:padding="12dp" />
+        <androidx.viewpager2.widget.ViewPager2
+            android:id="@+id/view_pager"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
 
     </LinearLayout>
 
-    <!-- Message pager -->
-    <androidx.viewpager2.widget.ViewPager2
-        android:id="@+id/view_pager"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1" />
-
-    <!-- Bottom action bar: SOS | SEND -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="72dp"
-        android:orientation="horizontal"
-        android:background="#0D0D0D">
-
-        <!-- SOS button -->
-        <LinearLayout
-            android:id="@+id/btn_sos"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:background="#C62828"
-            android:clickable="true"
-            android:focusable="true"
-            android:foreground="?attr/selectableItemBackground">
-
-            <ImageView
-                android:layout_width="30dp"
-                android:layout_height="30dp"
-                android:src="@android:drawable/ic_dialog_alert"
-                android:contentDescription="SOS"
-                android:tint="#FFFFFF" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="SOS"
-                android:textColor="#FFFFFF"
-                android:textSize="11sp"
-                android:textStyle="bold"
-                android:letterSpacing="0.1"
-                android:layout_marginTop="3dp" />
-        </LinearLayout>
-
-        <!-- Divider -->
-        <View
-            android:layout_width="1dp"
-            android:layout_height="match_parent"
-            android:background="#333333" />
-
-        <!-- SEND button -->
-        <LinearLayout
-            android:id="@+id/btn_send_msg"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:background="#1B5E20"
-            android:clickable="true"
-            android:focusable="true"
-            android:foreground="?attr/selectableItemBackground">
-
-            <ImageView
-                android:layout_width="30dp"
-                android:layout_height="30dp"
-                android:src="@android:drawable/ic_menu_send"
-                android:contentDescription="Send message"
-                android:tint="#FFFFFF" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="SEND"
-                android:textColor="#FFFFFF"
-                android:textSize="11sp"
-                android:textStyle="bold"
-                android:letterSpacing="0.1"
-                android:layout_marginTop="3dp" />
-        </LinearLayout>
-
-    </LinearLayout>
-
-    <!-- Debug reset button (hidden, shown only in debug builds) -->
-    <FrameLayout
+    <!-- Debug reset (mini FAB, bottom-start, debug only) -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_debug_reset"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         android:layout_gravity="bottom|start"
+        android:layout_margin="16dp"
+        android:contentDescription="Debug reset"
         android:visibility="gone"
-        android:background="#880E4F"
-        android:clickable="true"
-        android:focusable="true">
+        app:srcCompat="@android:drawable/ic_menu_delete"
+        app:backgroundTint="#880E4F"
+        app:fabSize="mini" />
 
-        <ImageView
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:layout_gravity="center"
-            android:src="@android:drawable/ic_menu_delete"
-            android:tint="#FFFFFF"
-            android:contentDescription="Debug reset" />
-    </FrameLayout>
+    <!-- SEND extended FAB (bottom-end, lower) -->
+    <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+        android:id="@+id/fab_compose"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="16dp"
+        android:text="SEND"
+        android:textColor="#FFFFFF"
+        android:textStyle="bold"
+        android:textSize="13sp"
+        android:contentDescription="New message"
+        app:icon="@android:drawable/ic_menu_send"
+        app:iconTint="#FFFFFF"
+        app:backgroundTint="#2E7D32" />
 
-</LinearLayout>
+    <!-- SOS extended FAB (bottom-end, above SEND) -->
+    <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+        android:id="@+id/fab_sos"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="92dp"
+        android:text="SOS"
+        android:textColor="#FFFFFF"
+        android:textStyle="bold"
+        android:textSize="13sp"
+        android:contentDescription="Quick SOS"
+        app:icon="@android:drawable/ic_dialog_alert"
+        app:iconTint="#FFFFFF"
+        app:backgroundTint="#C62828" />
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
