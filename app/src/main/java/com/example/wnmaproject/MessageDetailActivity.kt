@@ -161,21 +161,30 @@ class MessageDetailActivity : AppCompatActivity() {
             }
         }
 
-        // Segnala risolto (messaggi ricevuti)
+        // Segnala risolto (solo messaggi INFO ricevuti)
         val btnResolve = findViewById<Button>(R.id.btn_detail_resolve)
-        if (!isOwn) {
+        if (!isOwn && type == "INFO") {
+            val voted = getSharedPreferences("trekmesh_votes_mine", MODE_PRIVATE)
+                .getBoolean(msgId, false)
             btnResolve.visibility = View.VISIBLE
-            btnResolve.setOnClickListener {
-                AlertDialog.Builder(this)
-                    .setTitle("Segnala come risolto")
-                    .setMessage("Quando 2 utenti segnalano il messaggio come risolto, verrà eliminato dalla rete.")
-                    .setPositiveButton("Segnala") { _, _ ->
-                        TrekMeshBus.sendResolveVote(msgId)
-                        Toast.makeText(this, "Segnalazione inviata", Toast.LENGTH_SHORT).show()
-                        finish()
-                    }
-                    .setNegativeButton("Annulla", null)
-                    .show()
+            if (voted) {
+                btnResolve.text = "✓ Già segnalato"
+                btnResolve.isEnabled = false
+            } else {
+                btnResolve.setOnClickListener {
+                    AlertDialog.Builder(this)
+                        .setTitle("Segnala come risolto")
+                        .setMessage("Quando 2 utenti segnalano il messaggio come risolto, verrà eliminato dalla rete.")
+                        .setPositiveButton("Segnala") { _, _ ->
+                            getSharedPreferences("trekmesh_votes_mine", MODE_PRIVATE)
+                                .edit().putBoolean(msgId, true).apply()
+                            TrekMeshBus.sendResolveVote(msgId)
+                            Toast.makeText(this, "Segnalazione inviata", Toast.LENGTH_SHORT).show()
+                            finish()
+                        }
+                        .setNegativeButton("Annulla", null)
+                        .show()
+                }
             }
         }
     }

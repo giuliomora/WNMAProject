@@ -520,18 +520,24 @@ class TrekMeshService : Service() {
     }
 
     private fun handleResolveVote(endpointId: String, raw: String) {
-        val msgId = raw.substringAfter("|")
+        // Wire: RESOLVE_VOTE|msgId|voterName
+        val parts = raw.split("|", limit = 3)
+        if (parts.size < 3) return
+        val msgId = parts[1]
+        val voterName = parts[2]
         val prefs = getSharedPreferences("trekmesh_votes", MODE_PRIVATE)
-        val count = prefs.getInt(msgId, 0) + 1
-        prefs.edit().putInt(msgId, count).apply()
-        if (count >= 2) {
+        val voters = prefs.getString(msgId, "")!!
+            .split(",").filter { it.isNotBlank() }.toMutableSet()
+        if (!voters.add(voterName)) return  // voter già contato, non ritrasmettere
+        prefs.edit().putString(msgId, voters.joinToString(",")).apply()
+        if (voters.size >= 2) {
             serviceScope.launch { db.messageDao().deleteById(msgId) }
             TrekMeshBus.removeMessageFromMemory(msgId)
             val delWire = "$TYPE_DELETE_MSG|$msgId"
             val payload = Payload.fromBytes(delWire.toByteArray(Charsets.UTF_8))
             (connectedEndpoints - endpointId).forEach { connectionsClient.sendPayload(it, payload) }
         } else {
-            val forward = "$TYPE_RESOLVE_VOTE|$msgId"
+            val forward = "$TYPE_RESOLVE_VOTE|$msgId|$voterName"
             val payload = Payload.fromBytes(forward.toByteArray(Charsets.UTF_8))
             (connectedEndpoints - endpointId).forEach { connectionsClient.sendPayload(it, payload) }
         }
@@ -560,16 +566,18 @@ class TrekMeshService : Service() {
         serviceScope.launch {
             TrekMeshBus.resolveVotes.collect { msgId ->
                 val prefs = getSharedPreferences("trekmesh_votes", MODE_PRIVATE)
-                val count = prefs.getInt(msgId, 0) + 1
-                prefs.edit().putInt(msgId, count).apply()
-                if (count >= 2) {
+                val voters = prefs.getString(msgId, "")!!
+                    .split(",").filter { it.isNotBlank() }.toMutableSet()
+                voters.add(localEndpointName)
+                prefs.edit().putString(msgId, voters.joinToString(",")).apply()
+                if (voters.size >= 2) {
                     serviceScope.launch { db.messageDao().deleteById(msgId) }
                     TrekMeshBus.removeMessageFromMemory(msgId)
                     val wire = "$TYPE_DELETE_MSG|$msgId"
                     val payload = Payload.fromBytes(wire.toByteArray(Charsets.UTF_8))
                     connectedEndpoints.forEach { connectionsClient.sendPayload(it, payload) }
                 } else {
-                    val wire = "$TYPE_RESOLVE_VOTE|$msgId"
+                    val wire = "$TYPE_RESOLVE_VOTE|$msgId|$localEndpointName"
                     val payload = Payload.fromBytes(wire.toByteArray(Charsets.UTF_8))
                     connectedEndpoints.forEach { connectionsClient.sendPayload(it, payload) }
                 }
