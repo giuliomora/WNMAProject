@@ -209,9 +209,13 @@ class TrekMeshService : Service() {
                 TrekMeshBus.emitLog("Connesso a $name")
                 BenchmarkLogger.stop("discovery:$name")
                 val loc = currentLastLocation
-                EncounterLogger.logEncounter(this@TrekMeshService, name, loc?.latitude, loc?.longitude, loc?.altitude)
                 val myRole = UserRolePrefs.getRole(this@TrekMeshService) ?: UserRole.HIKER
+                // Rifugios log hikers they meet; hikers log everyone except rifugios (uploaded separately)
+                if (myRole == UserRole.RIFUGIO || !isRifugioPeer(name)) {
+                    EncounterLogger.logEncounter(this@TrekMeshService, name, loc?.latitude, loc?.longitude, loc?.altitude)
+                }
                 if (myRole == UserRole.HIKER && isRifugioPeer(name)) {
+                    Log.d(LOG_TAG, "Peer $name riconosciuto come rifugio, invio encounters")
                     serviceScope.launch { sendEncountersToRifugio(endpointId) }
                 }
                 serviceScope.launch { flushBufferTo(endpointId) }
@@ -981,19 +985,33 @@ class TrekMeshService : Service() {
     private fun isRifugioPeer(name: String) = !name.startsWith("Hiker-")
 
     private suspend fun sendEncountersToRifugio(endpointId: String) {
+        if (!EncounterLogger.hasEncounters(this)) {
+            TrekMeshBus.emitLog("📋 Nessun incontro da inviare al rifugio")
+            return
+        }
         val data = EncounterLogger.popEncounters(this) ?: return
-        val payload = "$TYPE_ENCOUNTERS|$localEndpointName|${String(data, Charsets.UTF_8)}"
+        val csvText = String(data, Charsets.UTF_8)
+        Log.d(LOG_TAG, "Invio encounters al rifugio ($endpointId):\n$csvText")
+        val payload = "$TYPE_ENCOUNTERS|$localEndpointName|$csvText"
         connectionsClient.sendPayload(endpointId, Payload.fromBytes(payload.toByteArray(Charsets.UTF_8)))
-        TrekMeshBus.emitLog("📋 Incontri inviati al rifugio")
+        TrekMeshBus.emitLog("📋 ${csvText.trim().lines().size} incontri inviati al rifugio")
     }
 
     private fun handleIncomingEncounters(endpointId: String, raw: String) {
         val role = UserRolePrefs.getRole(this) ?: UserRole.HIKER
-        if (role != UserRole.RIFUGIO) return
+        Log.d(LOG_TAG, "handleIncomingEncounters: role=$role raw_prefix=${raw.take(60)}")
+        if (role != UserRole.RIFUGIO) {
+            Log.w(LOG_TAG, "Scartato ENCOUNTERS: questo nodo non è un rifugio")
+            return
+        }
         val parts = raw.split("|", limit = 3)
-        if (parts.size < 3) return
+        if (parts.size < 3) {
+            Log.w(LOG_TAG, "ENCOUNTERS malformato: ${parts.size} parti")
+            return
+        }
         val sender = parts[1]
         val csvData = parts[2].toByteArray(Charsets.UTF_8)
+        Log.d(LOG_TAG, "Registro incontri da $sender: ${parts[2].take(100)}")
         EncounterLogger.mergeIntoRegistry(this, csvData, sender)
         TrekMeshBus.emitLog("📋 Registro aggiornato con gli incontri di $sender")
     }
