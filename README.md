@@ -15,10 +15,11 @@ To survive multi-day treks, TrekMesh balances connectivity with battery longevit
 *   **SOS Priority Boost:** Any outgoing SOS message instantly overrides the duty-cycle, forcing High Power Mode to maximize the probability of reaching a rescuer or gateway.
 
 ### 📡 2. BLE Beaconing ("Digital SOS Flare")
-Even when the mesh engine is in its sleep cycle, TrekMesh acts as a **Passive Emergency Beacon**:
+TrekMesh acts as a **Passive Emergency Beacon** regardless of whether the mesh network is enabled:
 *   **Continuous Heartbeat:** Broadcasts a BLE signal every second containing the user's ID and emergency status.
 *   **GPS-Embedded Signal:** The beacon carries compressed Lat/Lon coordinates, allowing search-and-rescue (SAR) drones or helicopters to locate a hiker without a full data handshake.
 *   **Passive Detection:** Rifugios and other hikers log passive detections: *"Passive SOS signal detected nearby (est. 45m)"*.
+*   **Always-On:** Even with the mesh service disabled, the BLE scanner continues running in the background. A device with Bluetooth on but no active mesh connection can still detect and alert on nearby SOS beacons.
 
 ### 🛡️ 3. Proactive Survival Tools
 *   **Virtual Breadcrumbs:** Automatically records GPS coordinates every 15 minutes. Upon an **SOS** trigger, the last 5 positions are attached to the alert, showing rescuers the hiker's path and direction of travel.
@@ -53,8 +54,8 @@ The network implements a tiered priority system in the transmission buffer:
 
 Nodes can assume two distinct roles to optimize network utility:
 *   **Hiker Role:** Standard profile for communication and mesh relaying.
-    *   **Ephemeral Identity:** A new random node name (e.g., `Hiker-A3F9`) is generated each session for privacy — no long-term tracking across treks.
-    *   **Mesh Toggle:** Hikers can disable the mesh service from Settings when not in the mountains, preventing unnecessary battery drain and auto-boot.
+    *   **Persistent Identity:** A random node name (e.g., `Hiker-A3F9`) is generated on first launch and reused across all sessions. It resets only if app data is cleared — read-only, not editable.
+    *   **Mesh Toggle:** Hikers can disable the Nearby mesh from Settings when not in the mountains. The BLE passive SOS scanner keeps running in the background regardless, consuming negligible battery.
 *   **Rifugio (Mountain Hut) Role:** Acts as a **High-Priority Safety Gateway**.
     *   **Custom Name:** Rifugio nodes can set a custom display name (e.g., *"Rifugio Stella Alpina"*) visible to all peers in the mesh. The name persists across reboots.
     *   **Cloud SOS Relay:** Automatically forwards mesh-received SOS messages to **Civil Protection** via HTTP API — exclusively available to Rifugio nodes.
@@ -92,8 +93,8 @@ A status bar above the message tabs shows the current connection state:
 The "Received" tab shows a live badge counter for unread incoming messages, reset automatically when the tab is opened.
 
 ### ⚙️ Settings
-*   **Mesh Service Toggle:** Enable or disable the mesh service on demand. When disabled, the service stops immediately and will not restart on next boot — ideal for hikers between treks.
-*   **Node Name:** Rifugio nodes can edit their display name directly from Settings; hikers see their current random session name (read-only).
+*   **Mesh Service Toggle:** Enable or disable the Nearby P2P mesh on demand. When disabled, the foreground service stays alive in **passive mode** (BLE SOS scanning only) — Nearby advertising and discovery are stopped to save battery. The passive scanner always runs regardless of this toggle.
+*   **Node Name:** Rifugio nodes can edit their display name directly from Settings; hikers see their fixed device name (read-only).
 *   **Notification Filter:** Choose which message types trigger notifications (All / SOS only / Info only / Disabled).
 *   **Role Switch:** Change between Hiker and Rifugio roles (restarts the mesh service and refreshes the node name section).
 
@@ -102,7 +103,7 @@ The "Received" tab shows a live badge counter for unread incoming messages, rese
 ## 🔒 Privacy & Security
 *   **AES-256-GCM Encryption:** All message payloads, including GPS metadata, are encrypted end-to-end. Tamper protection ensures corrupted data is discarded.
 *   **Bandwidth Upgrade:** The app automatically switches from Bluetooth to Wi-Fi Direct when transferring **images** for situational context.
-*   **Ephemeral Hiker Identity:** Random session names (e.g., `Hiker-A3F9`) are regenerated each session, preventing long-term tracking across treks.
+*   **Persistent Hiker Identity:** A random name (e.g., `Hiker-A3F9`) is generated once on first launch and reused across sessions. It resets only on app data clear — never backed up or transferred between devices.
 *   **No Backup of Identity Data:** Role, node name, and session preferences are excluded from Android cloud backup and device transfer — reinstalling always prompts for a fresh setup.
 
 ---
@@ -117,7 +118,7 @@ The "Received" tab shows a live badge counter for unread incoming messages, rese
     | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
     | `MSG` | `uuid` | `name` | `int` | `SOS/INFO` | `1-3` | `long` | `AES-Text+GPS` |
     | `SOS_STATUS` | `msgId` | `status` | `rifugioName` | — | — | — | — |
-    | `RESOLVE_VOTE` | `msgId` | — | — | — | — | — | — |
+    | `RESOLVE_VOTE` | `msgId` | `voterName` | — | — | — | — | — |
     | `DELETE_MSG` | `msgId` | — | — | — | — | — | — |
 
 ---
