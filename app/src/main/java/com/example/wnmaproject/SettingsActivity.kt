@@ -106,7 +106,7 @@ class SettingsActivity : AppCompatActivity() {
             btnEdit.setOnClickListener { showEditNameDialog(tvName) }
         } else {
             val randomName = getSharedPreferences("trekmesh_node", MODE_PRIVATE)
-                .getString("hiker_session_name", null) ?: "Hiker (generato all'avvio)"
+                .getString("hiker_name", null) ?: "Hiker (generato al primo avvio)"
             tvName.text = randomName
             tvName.setTextColor(0xFF888888.toInt())
         }

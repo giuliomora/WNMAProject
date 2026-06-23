@@ -1025,10 +1025,12 @@ class TrekMeshService : Service() {
                 }
             }
             else -> {
-                val name = "Hiker-$suffix"
-                getSharedPreferences("trekmesh_node", MODE_PRIVATE)
-                    .edit().putString("hiker_session_name", name).apply()
-                name
+                val prefs = getSharedPreferences("trekmesh_node", MODE_PRIVATE)
+                prefs.getString("hiker_name", null) ?: run {
+                    val name = "Hiker-$suffix"
+                    prefs.edit().putString("hiker_name", name).apply()
+                    name
+                }
             }
         }
     }
