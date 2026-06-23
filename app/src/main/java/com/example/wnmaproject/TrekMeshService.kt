@@ -78,6 +78,7 @@ class TrekMeshService : Service() {
         private const val TYPE_SOS_STATUS  = "SOS_STATUS"
         private const val TYPE_RESOLVE_VOTE = "RESOLVE_VOTE"
         private const val TYPE_DELETE_MSG   = "DELETE_MSG"
+        private const val TYPE_ENCOUNTERS    = "ENCOUNTERS"
         private const val FIELD_SEP = "" // ASCII Unit Separator
 
         private const val SCAN_LOW_POWER_MS = 3 * 60 * 1000L // 3 minuti solo BT
@@ -207,6 +208,12 @@ class TrekMeshService : Service() {
                 TrekMeshBus.updatePeerCount(connectedEndpoints.size)
                 TrekMeshBus.emitLog("Connesso a $name")
                 BenchmarkLogger.stop("discovery:$name")
+                val loc = currentLastLocation
+                EncounterLogger.logEncounter(this@TrekMeshService, name, loc?.latitude, loc?.longitude, loc?.altitude)
+                val myRole = UserRolePrefs.getRole(this@TrekMeshService) ?: UserRole.HIKER
+                if (myRole == UserRole.HIKER && isRifugioPeer(name)) {
+                    serviceScope.launch { sendEncountersToRifugio(endpointId) }
+                }
                 serviceScope.launch { flushBufferTo(endpointId) }
             } else {
                 val code = resolution.status.statusCode
@@ -276,6 +283,7 @@ class TrekMeshService : Service() {
                         TYPE_SOS_STATUS  -> handleIncomingSosStatus(endpointId, raw)
                         TYPE_RESOLVE_VOTE -> handleResolveVote(endpointId, raw)
                         TYPE_DELETE_MSG  -> handleDeleteMsg(endpointId, raw)
+                        TYPE_ENCOUNTERS  -> handleIncomingEncounters(endpointId, raw)
                         else -> Log.w(LOG_TAG, "Tipo sconosciuto da $endpointId")
                     }
                 }
@@ -965,6 +973,29 @@ class TrekMeshService : Service() {
                 Log.d(LOG_TAG, "Cleanup periodico eseguito")
             }
         }
+    }
+
+    // --- Encounter tracking ---
+
+    /** A peer is a rifugio if its name does NOT follow the "Hiker-XXXX" pattern. */
+    private fun isRifugioPeer(name: String) = !name.startsWith("Hiker-")
+
+    private suspend fun sendEncountersToRifugio(endpointId: String) {
+        val data = EncounterLogger.popEncounters(this) ?: return
+        val payload = "$TYPE_ENCOUNTERS|$localEndpointName|${String(data, Charsets.UTF_8)}"
+        connectionsClient.sendPayload(endpointId, Payload.fromBytes(payload.toByteArray(Charsets.UTF_8)))
+        TrekMeshBus.emitLog("📋 Incontri inviati al rifugio")
+    }
+
+    private fun handleIncomingEncounters(endpointId: String, raw: String) {
+        val role = UserRolePrefs.getRole(this) ?: UserRole.HIKER
+        if (role != UserRole.RIFUGIO) return
+        val parts = raw.split("|", limit = 3)
+        if (parts.size < 3) return
+        val sender = parts[1]
+        val csvData = parts[2].toByteArray(Charsets.UTF_8)
+        EncounterLogger.mergeIntoRegistry(this, csvData, sender)
+        TrekMeshBus.emitLog("📋 Registro aggiornato con gli incontri di $sender")
     }
 
     private fun startAdaptiveScanning() {
