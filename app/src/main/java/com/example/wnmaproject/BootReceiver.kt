@@ -24,7 +24,7 @@ class BootReceiver : BroadcastReceiver() {
             showPermissionNeededNotification(context)
         }
     }
-// test
+
     private fun hasCriticalPermissions(context: Context): Boolean {
         val required = buildList {
             add(Manifest.permission.ACCESS_FINE_LOCATION)
