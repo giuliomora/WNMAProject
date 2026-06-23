@@ -171,6 +171,7 @@ class TrekMeshService : Service() {
     private val endpointNames = mutableMapOf<String, String>()
     private val seenMessageIds = mutableSetOf<String>()
     private val ownMessageIds = mutableSetOf<String>()
+    private val seenSosStatuses = mutableSetOf<String>() // "msgId:STATUS"
 
     // Tracks incoming FILE payloads: payloadId -> temp File (set on receive)
     private val incomingFiles = mutableMapOf<Long, File>()
@@ -421,6 +422,7 @@ class TrekMeshService : Service() {
         val parts = raw.split("|", limit = 4)
         if (parts.size < 4) return
         val (_, msgId, status, rifugioName) = parts
+        if (!seenSosStatuses.add("$msgId:$status")) return
         serviceScope.launch { db.messageDao().updateStatus(msgId, status) }
         TrekMeshBus.updateMessageStatus(msgId, status)
         val label = when (status) {
@@ -462,6 +464,7 @@ class TrekMeshService : Service() {
         serviceScope.launch {
             seenMessageIds += db.messageDao().getAllIds()
             db.messageDao().getAll().forEach { e ->
+                if (e.status !in listOf("PENDING", "RECEIVED")) seenSosStatuses.add("${e.id}:${e.status}")
                 if (e.status != "RECEIVED") ownMessageIds.add(e.id)
                 TrekMeshBus.emitMessage(
                     id = e.id,
