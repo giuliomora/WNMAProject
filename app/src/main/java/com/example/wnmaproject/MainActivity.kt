@@ -129,7 +129,7 @@ class MainActivity : AppCompatActivity() {
             tv.text = "● Mesh: nessun nodo"
             tv.setTextColor(0xFF888888.toInt())
         } else {
-            tv.text = "● Mesh: $peerCount nodo${if (peerCount > 1) "i" else ""} connesso${if (peerCount > 1) "i" else ""}"
+            tv.text = "● Mesh: $peerCount ${if (peerCount > 1) "nodi connessi" else "nodo connesso"}"
             tv.setTextColor(0xFF4CAF50.toInt())
         }
     }
