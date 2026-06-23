@@ -74,6 +74,10 @@ object TrekMeshBus {
         _deleteMessage.tryEmit(msgId)
     }
 
+    fun removeMessageFromMemory(msgId: String) {
+        _messages.update { it.filter { m -> m.id != msgId } }
+    }
+
     fun emitLog(message: String) {
         _logs.update { it + message }
     }
