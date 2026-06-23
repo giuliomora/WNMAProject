@@ -44,12 +44,12 @@ fun buildMessageCard(context: Context, msg: ChatMessage): View {
         orientation = LinearLayout.VERTICAL
         setPadding(16, 12, 16, 12)
         setBackgroundColor(when {
-            isResolved     -> 0x224CAF50.toInt()  // verde scuro
-            isAcknowledged -> 0x33FF9800.toInt()  // arancione
-            isNearby       -> 0x44F44336.toInt()
-            isSos          -> 0x22F44336.toInt()
-            isBroadcast    -> 0x22FF9800.toInt()
-            else           -> 0x11FFFFFF.toInt()
+            isResolved     -> 0xFF1A2E1A.toInt()  // dark green
+            isAcknowledged -> 0xFF2E2010.toInt()  // dark orange
+            isNearby       -> 0xFF3D1010.toInt()  // bright red-dark (nearby SOS)
+            isSos          -> 0xFF2A1010.toInt()  // dark red
+            isBroadcast    -> 0xFF2A1E08.toInt()  // dark amber
+            else           -> 0xFF1E1E1E.toInt()  // dark card
         })
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
@@ -78,7 +78,7 @@ fun buildMessageCard(context: Context, msg: ChatMessage): View {
 
     if (isNearby) {
         header.addView(TextView(context).apply {
-            text = "📍 VICINO A TE"
+            text = "📍 NEARBY"
             textSize = 10f
             setPadding(8, 2, 8, 2)
             setTextColor(0xFFFFFFFF.toInt())
@@ -125,7 +125,7 @@ fun buildMessageCard(context: Context, msg: ChatMessage): View {
     // Badge stato SOS (acknowledged/resolved) — visibile a tutti
     if (isSos && (isAcknowledged || isResolved)) {
         card.addView(TextView(context).apply {
-            text = if (isResolved) "✅ Risolto" else "🟠 Preso in carico"
+            text = if (isResolved) "✅ Resolved" else "🟠 Acknowledged"
             textSize = 11f
             setTextColor(if (isResolved) 0xFF4CAF50.toInt() else 0xFFFF9800.toInt())
             setTypeface(typeface, Typeface.BOLD)

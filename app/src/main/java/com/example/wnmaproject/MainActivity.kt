@@ -5,6 +5,9 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
+import android.widget.FrameLayout
+import android.widget.ImageButton
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -13,7 +16,6 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.card.MaterialCardView
-import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.tabs.TabLayout
 import com.google.android.material.tabs.TabLayoutMediator
 import kotlinx.coroutines.launch
@@ -23,7 +25,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        
+
         setupSafetyTimerUI()
         setupMeshStatusUI()
         setupUnreadBadge()
@@ -34,8 +36,6 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
-        // Pulizia DB prima di avviare il servizio, così i messaggi scaduti
-        // non vengono caricati in memoria nemmeno al primo avvio
         lifecycleScope.launch {
             com.example.trekmesh.db.TrekMeshDatabase.getInstance(applicationContext)
                 .messageDao().deleteExpired()
@@ -59,27 +59,29 @@ class MainActivity : AppCompatActivity() {
             }
         }.attach()
 
-        findViewById<FloatingActionButton>(R.id.fab_settings).setOnClickListener {
+        // Settings icon in tab bar
+        findViewById<ImageButton>(R.id.btn_settings_tab).setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
 
-        findViewById<FloatingActionButton>(R.id.fab_compose).setOnClickListener {
+        // SEND button
+        findViewById<LinearLayout>(R.id.btn_send_msg).setOnClickListener {
             startActivity(Intent(this, ComposeMessageActivity::class.java))
         }
 
-        findViewById<FloatingActionButton>(R.id.fab_sos).setOnClickListener {
-            showSosConfirmDialog()
-        }
-
-        findViewById<FloatingActionButton>(R.id.fab_sos).setOnLongClickListener {
+        // SOS button
+        val btnSos = findViewById<LinearLayout>(R.id.btn_sos)
+        btnSos.setOnClickListener { showSosConfirmDialog() }
+        btnSos.setOnLongClickListener {
             showSafetyTimerDialog()
             true
         }
 
-        val fabReset = findViewById<FloatingActionButton>(R.id.fab_debug_reset)
+        // Debug reset button
+        val resetBtn = findViewById<FrameLayout>(R.id.fab_debug_reset)
         if (isDebug) {
-            fabReset.visibility = View.VISIBLE
-            fabReset.setOnClickListener {
+            resetBtn.visibility = View.VISIBLE
+            resetBtn.setOnClickListener {
                 AlertDialog.Builder(this)
                     .setTitle("[DEBUG] Reset application")
                     .setMessage("All data (database, preferences) will be deleted and all permissions revoked. The app will close.")
