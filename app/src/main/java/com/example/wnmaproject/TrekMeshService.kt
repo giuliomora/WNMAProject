@@ -185,6 +185,7 @@ class TrekMeshService : Service() {
         override fun onConnectionInitiated(endpointId: String, connectionInfo: ConnectionInfo) {
             Log.i(LOG_TAG, "Connessione iniziata da ${connectionInfo.endpointName}")
             TrekMeshBus.emitLog("Connessione in entrata da ${connectionInfo.endpointName}, accetto...")
+            BenchmarkLogger.start("discovery:${connectionInfo.endpointName}")
             pendingEndpoints.add(endpointId)
             endpointNames[endpointId] = connectionInfo.endpointName
             connectionsClient.acceptConnection(endpointId, payloadCallback)
@@ -205,6 +206,7 @@ class TrekMeshService : Service() {
                 connectionRetries.remove(endpointId)
                 TrekMeshBus.updatePeerCount(connectedEndpoints.size)
                 TrekMeshBus.emitLog("Connesso a $name")
+                BenchmarkLogger.stop("discovery:$name")
                 serviceScope.launch { flushBufferTo(endpointId) }
             } else {
                 val code = resolution.status.statusCode
@@ -352,6 +354,7 @@ class TrekMeshService : Service() {
 
         if (filePayloadId != 0L) pendingFileForMessage[filePayloadId] = msgId
 
+        BenchmarkLogger.log("MSG ricevuto da $sender | tipo=$type ttl=$ttl hops=${initialTtlFor(type) - ttl + 1}")
         val receivedTtl = ttl - 1
         TrekMeshBus.emitMessage(msgId, sender, type, priority, text, description, null, lat, lon, alt, isOwn = false, ttl = receivedTtl)
         serviceScope.launch {
@@ -924,6 +927,8 @@ class TrekMeshService : Service() {
         
         db.messageDao().deleteExpired()
     }
+
+    private fun initialTtlFor(type: String) = if (type == TYPE_BROADCAST) 15 else INITIAL_TTL
 
     private fun sendEntityToEndpoint(entity: MessageEntity, endpointId: String) {
         val (filePayload, filePayloadId) = buildFilePayload(entity.imagePath)

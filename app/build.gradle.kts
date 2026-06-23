@@ -25,6 +25,7 @@ android {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
             resValue("string", "app_name_variant", "TrekMesh Debug")
+            buildConfigField("Boolean", "BENCHMARK_MODE", "false")
         }
         release {
             isMinifyEnabled = false
@@ -33,6 +34,14 @@ android {
                 "proguard-rules.pro"
             )
             resValue("string", "app_name_variant", "TrekMesh")
+            buildConfigField("Boolean", "BENCHMARK_MODE", "false")
+        }
+        create("benchmark") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".benchmark"
+            versionNameSuffix = "-benchmark"
+            resValue("string", "app_name_variant", "TrekMesh Benchmark")
+            buildConfigField("Boolean", "BENCHMARK_MODE", "true")
         }
     }
     buildFeatures {
