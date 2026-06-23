@@ -49,14 +49,16 @@ class MainActivity : AppCompatActivity() {
 
         viewPager.adapter = MessagesPagerAdapter(this, showLog = isDebug)
 
+        val isBench = BuildConfig.BENCHMARK_MODE
+        // Build tab label list matching MessagesPagerAdapter order
+        val tabLabels = buildList {
+            add("Received"); add("Sent")
+            if (isDebug) add("Log")
+            if (isBench) add("Bench")
+            add("Settings")
+        }
         TabLayoutMediator(tabLayout, viewPager) { tab, position ->
-            tab.text = when {
-                position == 0              -> "Received"
-                position == 1              -> "Sent"
-                isDebug && position == 2   -> "Log"
-                isDebug && position == 3   -> "Bench"
-                else                       -> "Settings"
-            }
+            tab.text = tabLabels.getOrElse(position) { "?" }
         }.attach()
 
         setupUnreadBadge(tabLayout)

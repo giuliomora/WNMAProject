@@ -7,15 +7,32 @@ import androidx.viewpager2.adapter.FragmentStateAdapter
 class MessagesPagerAdapter(activity: FragmentActivity, private val showLog: Boolean) :
     FragmentStateAdapter(activity) {
 
-    // Release: Received, Sent, Settings           (3 tabs)
-    // Debug:   Received, Sent, Log, Bench, Settings (5 tabs)
-    override fun getItemCount() = if (showLog) 5 else 3
+    private val showBench = BuildConfig.BENCHMARK_MODE
 
-    override fun createFragment(position: Int): Fragment = when {
-        position == 0              -> ReceivedMessagesFragment()
-        position == 1              -> SentMessagesFragment()
-        showLog && position == 2   -> LogFragment()
-        showLog && position == 3   -> BenchmarkFragment()
-        else                       -> SettingsFragment()
+    // Release/Debug: Received, Sent, [Log,] Settings
+    // Benchmark:     Received, Sent, [Log,] Bench, Settings
+    override fun getItemCount(): Int {
+        var count = 2 // Received + Sent
+        if (showLog) count++ // Log
+        if (showBench) count++ // Bench
+        count++ // Settings
+        return count
+    }
+
+    override fun createFragment(position: Int): Fragment {
+        var idx = position
+        if (idx == 0) return ReceivedMessagesFragment()
+        idx--
+        if (idx == 0) return SentMessagesFragment()
+        idx--
+        if (showLog) {
+            if (idx == 0) return LogFragment()
+            idx--
+        }
+        if (showBench) {
+            if (idx == 0) return BenchmarkFragment()
+            idx--
+        }
+        return SettingsFragment()
     }
 }
