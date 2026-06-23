@@ -151,7 +151,9 @@ class MessageDetailActivity : AppCompatActivity() {
                     .setMessage("Vuoi eliminare questo messaggio? Verrà rimosso anche dai dispositivi degli altri utenti nella rete.")
                     .setPositiveButton("Elimina") { _, _ ->
                         lifecycleScope.launch {
-                            TrekMeshDatabase.getInstance(applicationContext).messageDao().deleteById(msgId)
+                            val dao = TrekMeshDatabase.getInstance(applicationContext).messageDao()
+                            dao.setTtlZero(msgId)
+                            dao.deleteById(msgId)
                         }
                         TrekMeshBus.deleteMessageById(msgId)
                         finish()

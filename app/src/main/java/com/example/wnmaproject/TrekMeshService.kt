@@ -531,7 +531,7 @@ class TrekMeshService : Service() {
         if (!voters.add(voterName)) return  // voter già contato, non ritrasmettere
         prefs.edit().putString(msgId, voters.joinToString(",")).apply()
         if (voters.size >= 2) {
-            serviceScope.launch { db.messageDao().deleteById(msgId) }
+            serviceScope.launch { db.messageDao().setTtlZero(msgId); db.messageDao().deleteById(msgId) }
             TrekMeshBus.removeMessageFromMemory(msgId)
             val delWire = "$TYPE_DELETE_MSG|$msgId"
             val payload = Payload.fromBytes(delWire.toByteArray(Charsets.UTF_8))
@@ -545,7 +545,7 @@ class TrekMeshService : Service() {
 
     private fun handleDeleteMsg(endpointId: String, raw: String) {
         val msgId = raw.substringAfter("|")
-        serviceScope.launch { db.messageDao().deleteById(msgId) }
+        serviceScope.launch { db.messageDao().setTtlZero(msgId); db.messageDao().deleteById(msgId) }
         TrekMeshBus.removeMessageFromMemory(msgId)
         val forward = "$TYPE_DELETE_MSG|$msgId"
         val payload = Payload.fromBytes(forward.toByteArray(Charsets.UTF_8))
@@ -571,7 +571,7 @@ class TrekMeshService : Service() {
                 voters.add(localEndpointName)
                 prefs.edit().putString(msgId, voters.joinToString(",")).apply()
                 if (voters.size >= 2) {
-                    serviceScope.launch { db.messageDao().deleteById(msgId) }
+                    serviceScope.launch { db.messageDao().setTtlZero(msgId); db.messageDao().deleteById(msgId) }
                     TrekMeshBus.removeMessageFromMemory(msgId)
                     val wire = "$TYPE_DELETE_MSG|$msgId"
                     val payload = Payload.fromBytes(wire.toByteArray(Charsets.UTF_8))
