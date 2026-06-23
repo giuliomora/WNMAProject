@@ -8,20 +8,18 @@ import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.viewpager2.widget.ViewPager2
+import com.google.android.material.card.MaterialCardView
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
 import com.google.android.material.floatingactionbutton.FloatingActionButton
-import com.google.android.material.card.MaterialCardView
 import com.google.android.material.tabs.TabLayout
+import com.google.android.material.tabs.TabLayoutMediator
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
-
-    private var isHandlingSettingsTab = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,48 +49,14 @@ class MainActivity : AppCompatActivity() {
 
         viewPager.adapter = MessagesPagerAdapter(this, showLog = isDebug)
 
-        // Build tabs manually so we can add Settings as a pseudo-tab
-        val contentTabCount = if (isDebug) 3 else 2
-        val settingsTabIndex = contentTabCount
-
-        tabLayout.addTab(tabLayout.newTab().setText("Received"))
-        tabLayout.addTab(tabLayout.newTab().setText("Sent"))
-        if (isDebug) tabLayout.addTab(tabLayout.newTab().setText("Log"))
-        tabLayout.addTab(
-            tabLayout.newTab()
-                .setIcon(ContextCompat.getDrawable(this, android.R.drawable.ic_menu_preferences))
-                .setContentDescription("Settings")
-        )
-
-        // ViewPager → TabLayout
-        viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
-            override fun onPageSelected(position: Int) {
-                if (!isHandlingSettingsTab) {
-                    tabLayout.selectTab(tabLayout.getTabAt(position))
-                }
+        TabLayoutMediator(tabLayout, viewPager) { tab, position ->
+            tab.text = when {
+                position == 0 -> "Received"
+                position == 1 -> "Sent"
+                isDebug && position == 2 -> "Log"
+                else -> "Settings"
             }
-        })
-
-        // TabLayout → ViewPager (Settings tab intercept)
-        tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
-            override fun onTabSelected(tab: TabLayout.Tab) {
-                if (isHandlingSettingsTab) return
-                if (tab.position == settingsTabIndex) {
-                    isHandlingSettingsTab = true
-                    tabLayout.selectTab(tabLayout.getTabAt(viewPager.currentItem))
-                    isHandlingSettingsTab = false
-                    startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
-                } else {
-                    viewPager.currentItem = tab.position
-                }
-            }
-            override fun onTabUnselected(tab: TabLayout.Tab) {}
-            override fun onTabReselected(tab: TabLayout.Tab) {
-                if (tab.position == settingsTabIndex) {
-                    startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
-                }
-            }
-        })
+        }.attach()
 
         setupUnreadBadge(tabLayout)
 
