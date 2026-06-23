@@ -32,7 +32,7 @@
                 <ImageView
                     android:layout_width="24dp"
                     android:layout_height="24dp"
-                    android:contentDescription="Icona Timer"
+                    android:contentDescription="Timer icon"
                     app:srcCompat="@android:drawable/ic_lock_idle_alarm"
                     app:tint="#BF360C" />
 
@@ -42,7 +42,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:layout_marginStart="12dp"
-                    android:text="Check-in tra: --:--"
+                    android:text="Check-in in: --:--"
                     android:textColor="#BF360C"
                     android:textStyle="bold" />
 
@@ -51,7 +51,7 @@
                     style="@style/Widget.MaterialComponents.Button.TextButton"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="STO BENE"
+                    android:text="I\'M OK"
                     android:textColor="#BF360C" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
@@ -69,7 +69,7 @@
                 android:id="@+id/tv_mesh_status"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="● Mesh: nessun nodo"
+                android:text="● Mesh: no nodes"
                 android:textSize="12sp"
                 android:textColor="#888888" />
 
@@ -97,7 +97,7 @@
         android:layout_gravity="bottom|start"
         android:layout_marginStart="16dp"
         android:layout_marginBottom="88dp"
-        android:contentDescription="Impostazioni"
+        android:contentDescription="Settings"
         app:srcCompat="@android:drawable/ic_menu_preferences"
         app:backgroundTint="#37474F"
         app:fabSize="mini" />
@@ -108,7 +108,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|start"
         android:layout_margin="16dp"
-        android:contentDescription="Reset debug"
+        android:contentDescription="Debug reset"
         android:visibility="gone"
         app:srcCompat="@android:drawable/ic_menu_delete"
         app:backgroundTint="#880E4F" />
@@ -120,7 +120,7 @@
         android:layout_gravity="bottom|end"
         android:layout_marginEnd="16dp"
         android:layout_marginBottom="88dp"
-        android:contentDescription="SOS rapido"
+        android:contentDescription="Quick SOS"
         app:srcCompat="@android:drawable/ic_dialog_alert"
         app:backgroundTint="#F44336" />
 
@@ -130,7 +130,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
         android:layout_margin="16dp"
-        android:contentDescription="Nuovo messaggio"
+        android:contentDescription="New message"
         app:srcCompat="@android:drawable/ic_input_add"
         app:backgroundTint="#4CAF50" />
 

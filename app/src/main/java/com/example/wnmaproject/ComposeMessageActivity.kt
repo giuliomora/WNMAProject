@@ -50,7 +50,7 @@ class ComposeMessageActivity : AppCompatActivity() {
         setContentView(R.layout.activity_compose_message)
 
         supportActionBar?.apply {
-            title = "Nuovo messaggio"
+            title = "New message"
             setDisplayHomeAsUpEnabled(true)
         }
 
@@ -118,7 +118,7 @@ class ComposeMessageActivity : AppCompatActivity() {
     private fun trySend() {
         val text = editText.text.toString().trim()
         if (text.isEmpty()) {
-            editText.error = "Il testo è obbligatorio"
+            editText.error = "Message text is required"
             return
         }
         val priority = when (radioPriority.checkedRadioButtonId) {

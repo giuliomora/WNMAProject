@@ -24,24 +24,24 @@
                 android:layout_height="48dp"
                 android:src="@android:drawable/ic_menu_revert"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Indietro"
+                android:contentDescription="Back"
                 android:tint="#FFFFFF" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
-                android:text="Impostazioni"
+                android:text="Settings"
                 android:textSize="20sp"
                 android:textStyle="bold"
                 android:textColor="#FFFFFF" />
         </LinearLayout>
 
-        <!-- Sezione Ruolo -->
+        <!-- Role section -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="RUOLO"
+            android:text="ROLE"
             android:textSize="11sp"
             android:textColor="#888888"
             android:letterSpacing="0.1"
@@ -86,7 +86,7 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Ruolo attuale"
+                            android:text="Current role"
                             android:textSize="12sp"
                             android:textColor="#888888" />
 
@@ -103,13 +103,13 @@
                         android:id="@+id/btn_change_role"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Cambia"
+                        android:text="Change"
                         android:textSize="13sp"
                         android:backgroundTint="#2A2A2A"
                         android:textColor="#FFFFFF" />
                 </LinearLayout>
 
-                <!-- Nome nodo -->
+                <!-- Node name -->
                 <View
                     android:layout_width="match_parent"
                     android:layout_height="1dp"
@@ -132,7 +132,7 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Il tuo nome nella rete"
+                            android:text="Your name in the network"
                             android:textSize="12sp"
                             android:textColor="#888888" />
 
@@ -149,7 +149,7 @@
                         android:id="@+id/btn_edit_name"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Modifica"
+                        android:text="Edit"
                         android:textSize="13sp"
                         android:backgroundTint="#2A2A2A"
                         android:textColor="#FFFFFF"
@@ -159,11 +159,11 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- Sezione Servizio Mesh -->
+        <!-- Mesh service section -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="SERVIZIO MESH"
+            android:text="MESH SERVICE"
             android:textSize="11sp"
             android:textColor="#888888"
             android:letterSpacing="0.1"
@@ -201,7 +201,7 @@
                             android:id="@+id/tv_service_status"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Mesh attiva"
+                            android:text="Mesh active"
                             android:textSize="16sp"
                             android:textStyle="bold"
                             android:textColor="#4CAF50" />
@@ -209,7 +209,7 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Disattiva quando non sei in escursione"
+                            android:text="Disable when you are not hiking"
                             android:textSize="12sp"
                             android:textColor="#888888"
                             android:layout_marginTop="2dp" />
@@ -225,11 +225,11 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- Sezione Notifiche -->
+        <!-- Notifications section -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="NOTIFICHE"
+            android:text="NOTIFICATIONS"
             android:textSize="11sp"
             android:textColor="#888888"
             android:letterSpacing="0.1"
@@ -255,7 +255,7 @@
                     android:id="@+id/rb_notif_all"
                     android:layout_width="match_parent"
                     android:layout_height="48dp"
-                    android:text="Tutti i messaggi (INFO e SOS)"
+                    android:text="All messages (INFO and SOS)"
                     android:textColor="#FFFFFF"
                     android:textSize="15sp"
                     android:paddingStart="8dp"
@@ -271,7 +271,7 @@
                     android:id="@+id/rb_notif_sos_only"
                     android:layout_width="match_parent"
                     android:layout_height="48dp"
-                    android:text="Solo SOS"
+                    android:text="SOS only"
                     android:textColor="#FFFFFF"
                     android:textSize="15sp"
                     android:paddingStart="8dp"
@@ -287,7 +287,7 @@
                     android:id="@+id/rb_notif_info_only"
                     android:layout_width="match_parent"
                     android:layout_height="48dp"
-                    android:text="Solo messaggi informativi"
+                    android:text="Info messages only"
                     android:textColor="#FFFFFF"
                     android:textSize="15sp"
                     android:paddingStart="8dp"
@@ -303,7 +303,7 @@
                     android:id="@+id/rb_notif_disabled"
                     android:layout_width="match_parent"
                     android:layout_height="48dp"
-                    android:text="Disabilitate"
+                    android:text="Disabled"
                     android:textColor="#FFFFFF"
                     android:textSize="15sp"
                     android:paddingStart="8dp"

@@ -42,10 +42,10 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun updateServiceStatusUI(tv: TextView, enabled: Boolean) {
         if (enabled) {
-            tv.text = "Mesh attiva"
+            tv.text = "Mesh active"
             tv.setTextColor(0xFF4CAF50.toInt())
         } else {
-            tv.text = "Mesh disattivata"
+            tv.text = "Mesh disabled"
             tv.setTextColor(0xFF888888.toInt())
         }
     }
@@ -56,24 +56,24 @@ class SettingsActivity : AppCompatActivity() {
 
         findViewById<Button>(R.id.btn_change_role).setOnClickListener {
             val newRole = if (currentRole == UserRole.HIKER) UserRole.RIFUGIO else UserRole.HIKER
-            val newRoleLabel = if (newRole == UserRole.RIFUGIO) "Rifugio 🏔️" else "Escursionista 🥾"
+            val newRoleLabel = if (newRole == UserRole.RIFUGIO) "Mountain Hut 🏔️" else "Hiker 🥾"
             AlertDialog.Builder(this)
-                .setTitle("Cambia ruolo")
-                .setMessage("Stai per passare a $newRoleLabel.\n\nIl servizio mesh verrà riavviato e il tuo identificatore nella rete cambierà. Continuare?")
-                .setPositiveButton("Cambia") { _, _ ->
+                .setTitle("Change role")
+                .setMessage("You are about to switch to $newRoleLabel.\n\nThe mesh service will restart and your network identifier will change. Continue?")
+                .setPositiveButton("Change") { _, _ ->
                     UserRolePrefs.saveRole(this, newRole)
                     updateRoleUI(newRole)
                     setupNodeNameSection()
                     restartMeshService()
                 }
-                .setNegativeButton("Annulla", null)
+                .setNegativeButton("Cancel", null)
                 .show()
         }
     }
 
     private fun updateRoleUI(role: UserRole) {
         val icon = if (role == UserRole.RIFUGIO) "🏔️" else "🥾"
-        val label = if (role == UserRole.RIFUGIO) "Rifugio" else "Escursionista"
+        val label = if (role == UserRole.RIFUGIO) "Mountain Hut" else "Hiker"
         val color = if (role == UserRole.RIFUGIO) 0xFFFF9800.toInt() else 0xFF4CAF50.toInt()
         findViewById<TextView>(R.id.tv_role_icon).text = icon
         findViewById<TextView>(R.id.tv_current_role).apply {
@@ -81,7 +81,7 @@ class SettingsActivity : AppCompatActivity() {
             setTextColor(color)
         }
         // Aggiorna il testo del pulsante in base al ruolo opposto
-        val nextLabel = if (role == UserRole.RIFUGIO) "→ Escursionista" else "→ Rifugio"
+        val nextLabel = if (role == UserRole.RIFUGIO) "→ Hiker" else "→ Mountain Hut"
         findViewById<Button>(R.id.btn_change_role).text = nextLabel
     }
 
@@ -95,13 +95,13 @@ class SettingsActivity : AppCompatActivity() {
         val role = UserRolePrefs.getRole(this) ?: UserRole.HIKER
 
         if (role == UserRole.RIFUGIO) {
-            val name = UserRolePrefs.getStoredRifugioName(this) ?: "Rifugio"
+            val name = UserRolePrefs.getStoredRifugioName(this) ?: "Mountain Hut"
             tvName.text = name
             btnEdit.visibility = android.view.View.VISIBLE
             btnEdit.setOnClickListener { showEditNameDialog(tvName) }
         } else {
             val randomName = getSharedPreferences("trekmesh_node", MODE_PRIVATE)
-                .getString("hiker_name", null) ?: "Hiker (generato al primo avvio)"
+                .getString("hiker_name", null) ?: "Hiker (generated on first launch)"
             tvName.text = randomName
             tvName.setTextColor(0xFF888888.toInt())
         }
@@ -110,20 +110,20 @@ class SettingsActivity : AppCompatActivity() {
     private fun showEditNameDialog(tvName: TextView) {
         val input = EditText(this).apply {
             setText(tvName.text)
-            hint = "Nome rifugio"
+            hint = "Mountain hut name"
             setPadding(48, 32, 48, 32)
         }
         AlertDialog.Builder(this)
-            .setTitle("Modifica nome")
+            .setTitle("Edit name")
             .setView(input)
-            .setPositiveButton("Salva") { _, _ ->
+            .setPositiveButton("Save") { _, _ ->
                 val newName = input.text.toString().trim().ifBlank { return@setPositiveButton }
                 getSharedPreferences("trekmesh_node", MODE_PRIVATE)
                     .edit().putString("rifugio_name", newName).apply()
                 tvName.text = newName
                 restartMeshService()
             }
-            .setNegativeButton("Annulla", null)
+            .setNegativeButton("Cancel", null)
             .show()
     }
 

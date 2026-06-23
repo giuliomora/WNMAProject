@@ -83,9 +83,9 @@ class MessageDetailActivity : AppCompatActivity() {
 
         // Badge stato
         val (statusText, statusColor) = when (status) {
-            "DELIVERED" -> "✓ Consegnato" to 0xCC4CAF50.toInt()
-            "PENDING"   -> "⏳ In attesa"  to 0xCC888888.toInt()
-            "RECEIVED"  -> "📥 Ricevuto"   to 0xCC2196F3.toInt()
+            "DELIVERED" -> "✓ Delivered" to 0xCC4CAF50.toInt()
+            "PENDING"   -> "⏳ Pending"   to 0xCC888888.toInt()
+            "RECEIVED"  -> "📥 Received"  to 0xCC2196F3.toInt()
             else        -> status          to 0xCC888888.toInt()
         }
         findViewById<TextView>(R.id.tv_detail_status).apply {
@@ -121,7 +121,7 @@ class MessageDetailActivity : AppCompatActivity() {
         val sdf = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault())
         findViewById<TextView>(R.id.tv_detail_timestamp).text = sdf.format(Date(timestamp))
 
-        findViewById<TextView>(R.id.tv_detail_ttl).text = "$ttl salti rimanenti"
+        findViewById<TextView>(R.id.tv_detail_ttl).text = "$ttl hops remaining"
 
         // GPS
         if (lat != 0.0 || lon != 0.0) {
@@ -131,12 +131,12 @@ class MessageDetailActivity : AppCompatActivity() {
             findViewById<LinearLayout>(R.id.row_detail_gps).visibility = View.VISIBLE
 
             findViewById<Button>(R.id.btn_detail_maps).setOnClickListener {
-                val label = sender.ifBlank { "Posizione" }
+                val label = sender.ifBlank { "Location" }
                 val uri = Uri.parse("geo:$lat,$lon?q=$lat,$lon($label)")
                 try {
                     startActivity(Intent(Intent.ACTION_VIEW, uri))
                 } catch (e: android.content.ActivityNotFoundException) {
-                    Toast.makeText(this, "Nessuna app mappe installata", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "No maps app installed", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -147,9 +147,9 @@ class MessageDetailActivity : AppCompatActivity() {
             btnDelete.visibility = View.VISIBLE
             btnDelete.setOnClickListener {
                 AlertDialog.Builder(this)
-                    .setTitle("Elimina messaggio")
-                    .setMessage("Vuoi eliminare questo messaggio? Verrà rimosso anche dai dispositivi degli altri utenti nella rete.")
-                    .setPositiveButton("Elimina") { _, _ ->
+                    .setTitle("Delete message")
+                    .setMessage("Do you want to delete this message? It will be removed from all other users' devices on the network.")
+                    .setPositiveButton("Delete") { _, _ ->
                         lifecycleScope.launch {
                             val dao = TrekMeshDatabase.getInstance(applicationContext).messageDao()
                             dao.setTtlZero(msgId)
@@ -158,7 +158,7 @@ class MessageDetailActivity : AppCompatActivity() {
                         TrekMeshBus.deleteMessageById(msgId)
                         finish()
                     }
-                    .setNegativeButton("Annulla", null)
+                    .setNegativeButton("Cancel", null)
                     .show()
             }
         }
@@ -170,21 +170,21 @@ class MessageDetailActivity : AppCompatActivity() {
                 .getBoolean(msgId, false)
             btnResolve.visibility = View.VISIBLE
             if (voted) {
-                btnResolve.text = "✓ Già segnalato"
+                btnResolve.text = "✓ Already reported"
                 btnResolve.isEnabled = false
             } else {
                 btnResolve.setOnClickListener {
                     AlertDialog.Builder(this)
-                        .setTitle("Segnala come risolto")
-                        .setMessage("Quando 2 utenti segnalano il messaggio come risolto, verrà eliminato dalla rete.")
-                        .setPositiveButton("Segnala") { _, _ ->
+                        .setTitle("Mark as resolved")
+                        .setMessage("When 2 users mark the message as resolved, it will be deleted from the network.")
+                        .setPositiveButton("Report") { _, _ ->
                             getSharedPreferences("trekmesh_votes_mine", MODE_PRIVATE)
                                 .edit().putBoolean(msgId, true).apply()
                             TrekMeshBus.sendResolveVote(msgId)
-                            Toast.makeText(this, "Segnalazione inviata", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this, "Report sent", Toast.LENGTH_SHORT).show()
                             finish()
                         }
-                        .setNegativeButton("Annulla", null)
+                        .setNegativeButton("Cancel", null)
                         .show()
                 }
             }

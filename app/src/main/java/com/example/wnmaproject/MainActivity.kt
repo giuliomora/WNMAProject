@@ -53,8 +53,8 @@ class MainActivity : AppCompatActivity() {
 
         TabLayoutMediator(tabLayout, viewPager) { tab, position ->
             tab.text = when (position) {
-                0    -> "Ricevuti"
-                1    -> "Inviati"
+                0    -> "Received"
+                1    -> "Sent"
                 else -> "Log"
             }
         }.attach()
@@ -81,12 +81,12 @@ class MainActivity : AppCompatActivity() {
             fabReset.visibility = View.VISIBLE
             fabReset.setOnClickListener {
                 AlertDialog.Builder(this)
-                    .setTitle("[DEBUG] Reset applicazione")
-                    .setMessage("Verranno cancellati tutti i dati (database, preferenze) e revocati tutti i permessi. L'app si chiuderà.")
+                    .setTitle("[DEBUG] Reset application")
+                    .setMessage("All data (database, preferences) will be deleted and all permissions revoked. The app will close.")
                     .setPositiveButton("Reset") { _, _ ->
                         getSystemService(ActivityManager::class.java).clearApplicationUserData()
                     }
-                    .setNegativeButton("Annulla", null)
+                    .setNegativeButton("Cancel", null)
                     .show()
             }
         }
@@ -123,13 +123,13 @@ class MainActivity : AppCompatActivity() {
     private fun updateMeshStatusBar(peerCount: Int) {
         val tv = findViewById<TextView>(R.id.tv_mesh_status)
         if (!MeshServicePrefs.isEnabled(this)) {
-            tv.text = "⚙ Attiva la mesh dalle impostazioni per utilizzare l'app"
+            tv.text = "⚙ Enable mesh from Settings to use the app"
             tv.setTextColor(0xFFFF9800.toInt())
         } else if (peerCount == 0) {
-            tv.text = "● Mesh: nessun nodo"
+            tv.text = "● Mesh: no nodes"
             tv.setTextColor(0xFF888888.toInt())
         } else {
-            tv.text = "● Mesh: $peerCount ${if (peerCount > 1) "nodi connessi" else "nodo connesso"}"
+            tv.text = "● Mesh: $peerCount ${if (peerCount > 1) "nodes connected" else "node connected"}"
             tv.setTextColor(0xFF4CAF50.toInt())
         }
     }
@@ -145,7 +145,7 @@ class MainActivity : AppCompatActivity() {
                     card.visibility = View.VISIBLE
                     val mins = seconds / 60
                     val secs = seconds % 60
-                    text.text = "Check-in tra: %02d:%02d".format(mins, secs)
+                    text.text = "Check-in in: %02d:%02d".format(mins, secs)
                 } else {
                     card.visibility = View.GONE
                 }
@@ -158,9 +158,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showSafetyTimerDialog() {
-        val options = arrayOf("30 minuti", "1 ora", "2 ore")
+        val options = arrayOf("30 minutes", "1 hour", "2 hours")
         AlertDialog.Builder(this)
-            .setTitle("Imposta Timer di Sicurezza")
+            .setTitle("Set Safety Timer")
             .setItems(options) { _, which ->
                 val action = when (which) {
                     0 -> SafetyTimerAction.START_30M
@@ -169,29 +169,29 @@ class MainActivity : AppCompatActivity() {
                 }
                 TrekMeshBus.triggerSafetyAction(action)
             }
-            .setNegativeButton("Annulla", null)
+            .setNegativeButton("Cancel", null)
             .show()
     }
 
     private fun showSosConfirmDialog() {
         AlertDialog.Builder(this)
-            .setTitle("⚠️ Invio SOS rapido")
+            .setTitle("⚠️ Quick SOS")
             .setMessage(
-                "Stai per inviare:\n\n" +
-                "\"Un escursionista sta chiedendo aiuto\"\n\n" +
-                "Priorità: ALTA (SOS 3)\n\n" +
-                "Il messaggio non potrà essere modificato o annullato. Confermi?"
+                "You are about to send:\n\n" +
+                "\"A hiker is asking for help\"\n\n" +
+                "Priority: HIGH (SOS 3)\n\n" +
+                "This message cannot be modified or cancelled. Confirm?"
             )
-            .setPositiveButton("Invia SOS") { _, _ ->
+            .setPositiveButton("Send SOS") { _, _ ->
                 TrekMeshBus.sendMessage(
                     OutgoingMessage(
                         type     = "SOS",
                         priority = 3,
-                        text     = "Un escursionista sta chiedendo aiuto"
+                        text     = "A hiker is asking for help"
                     )
                 )
             }
-            .setNegativeButton("Annulla", null)
+            .setNegativeButton("Cancel", null)
             .show()
     }
 }

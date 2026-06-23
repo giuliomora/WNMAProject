@@ -24,7 +24,7 @@
                 android:layout_height="48dp"
                 android:src="@android:drawable/ic_menu_revert"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Indietro"
+                android:contentDescription="Back"
                 android:tint="#FFFFFF" />
 
             <TextView
@@ -37,7 +37,7 @@
                 android:textColor="#FFFFFF" />
         </LinearLayout>
 
-        <!-- Badge tipo/priorità -->
+        <!-- Type/priority badge -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -66,7 +66,7 @@
                 android:textColor="#FFFFFF" />
         </LinearLayout>
 
-        <!-- Immagine -->
+        <!-- Image -->
         <ImageView
             android:id="@+id/iv_detail_image"
             android:layout_width="match_parent"
@@ -76,11 +76,11 @@
             android:visibility="gone"
             android:layout_marginBottom="16dp" />
 
-        <!-- Testo principale -->
+        <!-- Main text -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="MESSAGGIO"
+            android:text="MESSAGE"
             android:textSize="11sp"
             android:textColor="#888888"
             android:letterSpacing="0.1"
@@ -95,12 +95,12 @@
             android:lineSpacingMultiplier="1.4"
             android:layout_marginBottom="16dp" />
 
-        <!-- Descrizione -->
+        <!-- Description -->
         <TextView
             android:id="@+id/label_detail_desc"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="DESCRIZIONE"
+            android:text="DESCRIPTION"
             android:textSize="11sp"
             android:textColor="#888888"
             android:letterSpacing="0.1"
@@ -117,18 +117,18 @@
             android:layout_marginBottom="16dp"
             android:visibility="gone" />
 
-        <!-- Separatore -->
+        <!-- Divider -->
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
             android:background="#1FFFFFFF"
             android:layout_marginBottom="16dp" />
 
-        <!-- Metadati -->
+        <!-- Metadata -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="DETTAGLI"
+            android:text="DETAILS"
             android:textSize="11sp"
             android:textColor="#888888"
             android:letterSpacing="0.1"
@@ -140,17 +140,17 @@
             android:orientation="vertical">
 
             <LinearLayout android:layout_width="match_parent" android:layout_height="36dp" android:orientation="horizontal" android:gravity="center_vertical">
-                <TextView android:layout_width="120dp" android:layout_height="wrap_content" android:text="Mittente" android:textSize="13sp" android:textColor="#888888" />
+                <TextView android:layout_width="120dp" android:layout_height="wrap_content" android:text="Sender" android:textSize="13sp" android:textColor="#888888" />
                 <TextView android:id="@+id/tv_detail_sender" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="13sp" android:textColor="#FFFFFF" />
             </LinearLayout>
 
             <LinearLayout android:layout_width="match_parent" android:layout_height="36dp" android:orientation="horizontal" android:gravity="center_vertical">
-                <TextView android:layout_width="120dp" android:layout_height="wrap_content" android:text="Data e ora" android:textSize="13sp" android:textColor="#888888" />
+                <TextView android:layout_width="120dp" android:layout_height="wrap_content" android:text="Date and time" android:textSize="13sp" android:textColor="#888888" />
                 <TextView android:id="@+id/tv_detail_timestamp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="13sp" android:textColor="#FFFFFF" />
             </LinearLayout>
 
             <LinearLayout android:layout_width="match_parent" android:layout_height="36dp" android:orientation="horizontal" android:gravity="center_vertical">
-                <TextView android:layout_width="120dp" android:layout_height="wrap_content" android:text="TTL residuo" android:textSize="13sp" android:textColor="#888888" />
+                <TextView android:layout_width="120dp" android:layout_height="wrap_content" android:text="Remaining TTL" android:textSize="13sp" android:textColor="#888888" />
                 <TextView android:id="@+id/tv_detail_ttl" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="13sp" android:textColor="#FFFFFF" />
             </LinearLayout>
 
@@ -162,14 +162,14 @@
                 android:gravity="center_vertical"
                 android:minHeight="36dp"
                 android:visibility="gone">
-                <TextView android:layout_width="120dp" android:layout_height="wrap_content" android:text="Posizione GPS" android:textSize="13sp" android:textColor="#888888" />
+                <TextView android:layout_width="120dp" android:layout_height="wrap_content" android:text="GPS location" android:textSize="13sp" android:textColor="#888888" />
                 <TextView android:id="@+id/tv_detail_gps" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textSize="13sp" android:textColor="#4FC3F7" />
                 <Button
                     android:id="@+id/btn_detail_maps"
                     style="@style/Widget.MaterialComponents.Button.TextButton"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Apri in Maps"
+                    android:text="Open in Maps"
                     android:textSize="11sp"
                     android:textColor="#4FC3F7"
                     android:paddingStart="4dp"
@@ -178,23 +178,23 @@
 
         </LinearLayout>
 
-        <!-- Elimina (INFO inviati) -->
+        <!-- Delete (own INFO messages) -->
         <Button
             android:id="@+id/btn_detail_delete"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
-            android:text="Elimina messaggio"
+            android:text="Delete message"
             android:backgroundTint="#B71C1C"
             android:visibility="gone" />
 
-        <!-- Segnala risolto (messaggi ricevuti) -->
+        <!-- Mark as resolved (received messages) -->
         <Button
             android:id="@+id/btn_detail_resolve"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
-            android:text="Segnala come risolto"
+            android:text="Mark as resolved"
             android:backgroundTint="#388E3C"
             android:visibility="gone" />
 

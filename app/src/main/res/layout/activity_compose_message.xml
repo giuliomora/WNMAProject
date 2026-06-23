@@ -12,11 +12,11 @@
         android:orientation="vertical"
         android:padding="20dp">
 
-        <!-- Tipo messaggio -->
+        <!-- Message type -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="TIPO MESSAGGIO"
+            android:text="MESSAGE TYPE"
             android:textStyle="bold"
             android:textSize="11sp"
             android:textColor="#888888"
@@ -54,18 +54,18 @@
                 android:layout_height="match_parent"
                 android:layout_weight="1"
                 android:layout_marginStart="8dp"
-                android:text="AVVISO"
+                android:text="ALERT"
                 android:textSize="14sp"
                 android:backgroundTint="#FF9800"
                 android:visibility="gone" />
 
         </LinearLayout>
 
-        <!-- Priorità -->
+        <!-- Priority -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="PRIORITÀ"
+            android:text="PRIORITY"
             android:textStyle="bold"
             android:textSize="11sp"
             android:textColor="#888888"
@@ -84,7 +84,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="1 – Bassa"
+                android:text="1 – Low"
                 android:textColor="#FFFFFF"
                 android:buttonTint="#4FC3F7"
                 android:checked="true" />
@@ -94,7 +94,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="2 – Media"
+                android:text="2 – Medium"
                 android:textColor="#FFFFFF"
                 android:buttonTint="#4FC3F7" />
 
@@ -103,17 +103,17 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="3 – Alta"
+                android:text="3 – High"
                 android:textColor="#FFFFFF"
                 android:buttonTint="#4FC3F7" />
 
         </RadioGroup>
 
-        <!-- Testo -->
+        <!-- Text -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="MESSAGGIO *"
+            android:text="MESSAGE *"
             android:textStyle="bold"
             android:textSize="11sp"
             android:textColor="#888888"
@@ -124,7 +124,7 @@
             android:id="@+id/edit_text"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Testo del messaggio"
+            android:hint="Message text"
             android:textColorHint="#555555"
             android:textColor="#FFFFFF"
             android:inputType="textMultiLine"
@@ -134,11 +134,11 @@
             android:padding="12dp"
             android:layout_marginBottom="20dp" />
 
-        <!-- Descrizione -->
+        <!-- Description -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="DESCRIZIONE (facoltativa)"
+            android:text="DESCRIPTION (optional)"
             android:textStyle="bold"
             android:textSize="11sp"
             android:textColor="#888888"
@@ -149,7 +149,7 @@
             android:id="@+id/edit_description"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Dettagli aggiuntivi..."
+            android:hint="Additional details..."
             android:textColorHint="#555555"
             android:textColor="#FFFFFF"
             android:inputType="textMultiLine"
@@ -159,11 +159,11 @@
             android:padding="12dp"
             android:layout_marginBottom="20dp" />
 
-        <!-- Foto -->
+        <!-- Photo -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="FOTO (facoltativa)"
+            android:text="PHOTO (optional)"
             android:textStyle="bold"
             android:textSize="11sp"
             android:textColor="#888888"
@@ -191,7 +191,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="Aggiungi foto"
+                android:text="Add photo"
                 android:backgroundTint="#444444" />
 
             <Button
@@ -199,18 +199,18 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
-                android:text="Rimuovi"
+                android:text="Remove"
                 android:backgroundTint="#444444"
                 android:visibility="gone" />
 
         </LinearLayout>
 
-        <!-- Invia -->
+        <!-- Send -->
         <Button
             android:id="@+id/btn_send"
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:text="Invia"
+            android:text="Send"
             android:textSize="16sp"
             android:textStyle="bold"
             android:backgroundTint="#4CAF50" />

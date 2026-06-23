@@ -185,7 +185,7 @@ class TrekMeshService : Service() {
     private val connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
         override fun onConnectionInitiated(endpointId: String, connectionInfo: ConnectionInfo) {
             Log.i(LOG_TAG, "Connessione iniziata da ${connectionInfo.endpointName}")
-            TrekMeshBus.emitLog("Connessione in entrata da ${connectionInfo.endpointName}, accetto...")
+            TrekMeshBus.emitLog("Incoming connection from ${connectionInfo.endpointName}, accepting...")
             BenchmarkLogger.start("discovery:${connectionInfo.endpointName}")
             pendingEndpoints.add(endpointId)
             endpointNames[endpointId] = connectionInfo.endpointName
@@ -206,7 +206,7 @@ class TrekMeshService : Service() {
                 connectedEndpoints.add(endpointId)
                 connectionRetries.remove(endpointId)
                 TrekMeshBus.updatePeerCount(connectedEndpoints.size)
-                TrekMeshBus.emitLog("Connesso a $name")
+                TrekMeshBus.emitLog("Connected to $name")
                 BenchmarkLogger.stop("discovery:$name")
                 val loc = currentLastLocation
                 val myRole = UserRolePrefs.getRole(this@TrekMeshService) ?: UserRole.HIKER
@@ -237,7 +237,7 @@ class TrekMeshService : Service() {
                 } else {
                     connectionRetries.remove(endpointId)
                     endpointNames.remove(endpointId)
-                    TrekMeshBus.emitLog("Connessione fallita (codice: $code)")
+                    TrekMeshBus.emitLog("Connection failed (code: $code)")
                 }
             }
         }
@@ -248,7 +248,7 @@ class TrekMeshService : Service() {
             pendingEndpoints.remove(endpointId)
             endpointNames.remove(endpointId)
             TrekMeshBus.updatePeerCount(connectedEndpoints.size)
-            TrekMeshBus.emitLog("Disconnesso da $name")
+            TrekMeshBus.emitLog("Disconnected from $name")
         }
     }
 
@@ -259,7 +259,7 @@ class TrekMeshService : Service() {
         ) {
             if (endpointId in connectedEndpoints || endpointId in pendingEndpoints) return
             if (endpointNames.values.contains(info.endpointName)) return
-            TrekMeshBus.emitLog("Dispositivo trovato: ${info.endpointName}, richiedo connessione...")
+            TrekMeshBus.emitLog("Device found: ${info.endpointName}, requesting connection...")
             pendingEndpoints.add(endpointId)
             endpointNames[endpointId] = info.endpointName
             connectionsClient.requestConnection(localEndpointName, endpointId, connectionLifecycleCallback)
@@ -355,7 +355,7 @@ class TrekMeshService : Service() {
             // I breadcrumbs sono nel 4° elemento del geoBlob se presenti
             val crumbs = if (geoParts.size >= 4) geoParts[3] else ""
             if (crumbs.isNotEmpty()) {
-                TrekMeshBus.emitLog("Ricevuta traccia storica (Breadcrumbs) da $sender")
+                TrekMeshBus.emitLog("Received historical track (Breadcrumbs) from $sender")
             }
         }
 
@@ -409,7 +409,7 @@ class TrekMeshService : Service() {
                     dao = db.pendingAlertDao()
                 )
                 if (relayed) {
-                    TrekMeshBus.emitLog("SOS inoltrato alla Protezione Civile ✓")
+                    TrekMeshBus.emitLog("SOS forwarded to Civil Protection ✓")
                     showRelayConfirmNotification(sender)
                 }
             }
@@ -429,7 +429,7 @@ class TrekMeshService : Service() {
         if (!ownMessageIds.remove(originalMsgId)) return // ACK per un messaggio non nostro, ignora
         serviceScope.launch { db.messageDao().updateStatus(originalMsgId, "DELIVERED") }
         TrekMeshBus.updateMessageStatus(originalMsgId, "DELIVERED")
-        TrekMeshBus.emitLog("Messaggio consegnato a $ackerName")
+        TrekMeshBus.emitLog("Message delivered to $ackerName")
     }
 
     private fun handleIncomingSosStatus(endpointId: String, raw: String) {
@@ -441,8 +441,8 @@ class TrekMeshService : Service() {
         serviceScope.launch { db.messageDao().updateStatus(msgId, status) }
         TrekMeshBus.updateMessageStatus(msgId, status)
         val label = when (status) {
-            "ACKNOWLEDGED" -> "preso in carico da $rifugioName"
-            "RESOLVED"     -> "risolto da $rifugioName"
+            "ACKNOWLEDGED" -> "acknowledged by $rifugioName"
+            "RESOLVED"     -> "resolved by $rifugioName"
             else           -> status
         }
         TrekMeshBus.emitLog("SOS $label")
@@ -636,17 +636,17 @@ class TrekMeshService : Service() {
             TrekMeshBus.updateSafetyTimer(0)
             triggerSafetyAlarm()
         }
-        TrekMeshBus.emitLog("Timer di sicurezza avviato: ${seconds / 60} minuti")
+        TrekMeshBus.emitLog("Safety timer started: ${seconds / 60} minutes")
     }
 
     private fun stopSafetyTimer() {
         safetyTimerJob?.cancel()
         TrekMeshBus.updateSafetyTimer(0)
-        TrekMeshBus.emitLog("Timer di sicurezza interrotto ✓")
+        TrekMeshBus.emitLog("Safety timer stopped ✓")
     }
 
     private fun triggerSafetyAlarm() {
-        TrekMeshBus.emitLog("⚠️ ALLARME: Check-in mancato! Invio SOS automatico...")
+        TrekMeshBus.emitLog("⚠️ ALERT: Missed check-in! Sending automatic SOS...")
         TrekMeshBus.sendMessage(OutgoingMessage(
             type = "SOS",
             priority = 3,
@@ -763,9 +763,9 @@ class TrekMeshService : Service() {
                         // (il beacon BLE è un fallback per quando non c'è connessione dati)
                         val alreadyConnected = connectedEndpoints.isNotEmpty()
                         if (!alreadyConnected) {
-                            TrekMeshBus.emitLog("🚨 SOS passivo captato$distMsg! (beacon BLE, nessuna connessione mesh attiva)")
+                            TrekMeshBus.emitLog("🚨 Passive SOS detected$distMsg! (BLE beacon, no active mesh connection)")
                             if (UserRolePrefs.getRole(this@TrekMeshService) == UserRole.RIFUGIO) {
-                                TrekMeshBus.emitLog("Rifugio: avvicinarsi all'escursionista per stabilire connessione mesh e inoltro SOS.")
+                                TrekMeshBus.emitLog("Mountain Hut: approach the hiker to establish mesh connection and SOS relay.")
                             }
                         }
                     }
@@ -788,7 +788,7 @@ class TrekMeshService : Service() {
             startAdaptiveScanning()
         } else {
             stopNearby()
-            TrekMeshBus.emitLog("Mesh disattivata — monitoraggio passivo SOS BLE attivo")
+            TrekMeshBus.emitLog("Mesh disabled — passive BLE SOS monitoring active")
         }
         return START_STICKY
     }
@@ -869,7 +869,7 @@ class TrekMeshService : Service() {
                                 dao = db.pendingAlertDao()
                             )
                             if (relayed) {
-                                TrekMeshBus.emitLog("SOS inoltrato alla Protezione Civile ✓")
+                                TrekMeshBus.emitLog("SOS forwarded to Civil Protection ✓")
                                 showRelayConfirmNotification(localEndpointName)
                             }
                         }
@@ -877,7 +877,7 @@ class TrekMeshService : Service() {
                 }
 
                 if (connectedEndpoints.isEmpty()) {
-                    TrekMeshBus.emitLog("Nessun dispositivo connesso — messaggio bufferizzato")
+                    TrekMeshBus.emitLog("No devices connected — message buffered")
                     return@collect
                 }
                 sendToAll(msg)
@@ -919,7 +919,7 @@ class TrekMeshService : Service() {
         if (buffered.isEmpty()) return
         
         val name = endpointNames[endpointId] ?: endpointId
-        TrekMeshBus.emitLog("Sincronizzazione mesh con $name: invio ${buffered.size} messaggi (priorità SOS prima)...")
+        TrekMeshBus.emitLog("Mesh sync with $name: sending ${buffered.size} messages (SOS priority first)...")
         
         // Separiamo i tipi per sicurezza ulteriore nell'invio sequenziale
         val sosMessages = buffered.filter { it.type == "SOS" }
@@ -986,7 +986,7 @@ class TrekMeshService : Service() {
 
     private suspend fun sendEncountersToRifugio(endpointId: String) {
         if (!EncounterLogger.hasEncounters(this)) {
-            TrekMeshBus.emitLog("📋 Nessun incontro da inviare al rifugio")
+            TrekMeshBus.emitLog("📋 No encounters to send to mountain hut")
             return
         }
         val data = EncounterLogger.popEncounters(this) ?: return
@@ -994,7 +994,7 @@ class TrekMeshService : Service() {
         Log.d(LOG_TAG, "Invio encounters al rifugio ($endpointId):\n$csvText")
         val payload = "$TYPE_ENCOUNTERS|$localEndpointName|$csvText"
         connectionsClient.sendPayload(endpointId, Payload.fromBytes(payload.toByteArray(Charsets.UTF_8)))
-        TrekMeshBus.emitLog("📋 ${csvText.trim().lines().size} incontri inviati al rifugio")
+        TrekMeshBus.emitLog("📋 ${csvText.trim().lines().size} encounters sent to mountain hut")
     }
 
     private fun handleIncomingEncounters(endpointId: String, raw: String) {
@@ -1013,7 +1013,7 @@ class TrekMeshService : Service() {
         val csvData = parts[2].toByteArray(Charsets.UTF_8)
         Log.d(LOG_TAG, "Registro incontri da $sender: ${parts[2].take(100)}")
         EncounterLogger.mergeIntoRegistry(this, csvData, sender)
-        TrekMeshBus.emitLog("📋 Registro aggiornato con gli incontri di $sender")
+        TrekMeshBus.emitLog("📋 Registry updated with encounters from $sender")
     }
 
     private fun startAdaptiveScanning() {
@@ -1034,7 +1034,7 @@ class TrekMeshService : Service() {
                 delay(SCAN_LOW_POWER_MS)
 
                 if (connectedEndpoints.isEmpty()) {
-                    TrekMeshBus.emitLog("Nessun dispositivo trovato, attivo WiFi Direct per scansione profonda...")
+                    TrekMeshBus.emitLog("No devices found, activating Wi-Fi Direct for deep scan...")
                     currentScanMode = ScanMode.HIGH_POWER
                     startNetworking(highPower = true)
                     delay(SCAN_HIGH_POWER_MS)
@@ -1044,7 +1044,7 @@ class TrekMeshService : Service() {
     }
 
     private fun forceHighPowerScan() {
-        TrekMeshBus.emitLog("Priorità SOS: Attivazione WiFi Direct per massimizzare raggio...")
+        TrekMeshBus.emitLog("SOS priority: activating Wi-Fi Direct to maximise range...")
         adaptiveScanJob?.cancel()
         currentScanMode = ScanMode.HIGH_POWER
         startNetworking(highPower = true)
@@ -1074,13 +1074,13 @@ class TrekMeshService : Service() {
             connectionLifecycleCallback, advertisingOptions)
             .addOnSuccessListener { 
                 val mode = if (highPower) "ALTA POTENZA (WiFi)" else "BASSO CONSUMO (BT)"
-                TrekMeshBus.emitLog("[$localEndpointName] In ascolto modalità $mode...")
+                TrekMeshBus.emitLog("[$localEndpointName] Listening in $mode mode...")
             }
-            .addOnFailureListener { e -> TrekMeshBus.emitLog("Errore advertising: ${e.message}") }
+            .addOnFailureListener { e -> TrekMeshBus.emitLog("Advertising error: ${e.message}") }
 
         connectionsClient.startDiscovery(serviceId, endpointDiscoveryCallback, discoveryOptions)
-            .addOnSuccessListener { TrekMeshBus.emitLog("Scansione avviata...") }
-            .addOnFailureListener { e -> TrekMeshBus.emitLog("Errore discovery: ${e.message}") }
+            .addOnSuccessListener { TrekMeshBus.emitLog("Discovery started...") }
+            .addOnFailureListener { e -> TrekMeshBus.emitLog("Discovery error: ${e.message}") }
     }
 
     private fun retryConnection(endpointId: String) {
@@ -1158,7 +1158,7 @@ class TrekMeshService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val title = if (isSos) "🆘 SOS da $sender (priorità $priority)" else "📩 Messaggio da $sender"
+        val title = if (isSos) "🆘 SOS from $sender (priority $priority)" else "📩 Message from $sender"
         val nm = getSystemService(NotificationManager::class.java) ?: return
         val notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ALERT_ID)
             .setContentTitle(title)
@@ -1196,8 +1196,8 @@ class TrekMeshService : Service() {
     fun showRelayConfirmNotification(sender: String) {
         val nm = getSystemService(NotificationManager::class.java) ?: return
         val notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_RELAY_ID)
-            .setContentTitle("✅ SOS inoltrato alla Protezione Civile")
-            .setContentText("L'SOS di $sender è stato trasmesso con successo.")
+            .setContentTitle("✅ SOS forwarded to Civil Protection")
+            .setContentText("The SOS from $sender has been successfully transmitted.")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
@@ -1208,9 +1208,9 @@ class TrekMeshService : Service() {
     private fun createNotification(): Notification {
         val meshEnabled = MeshServicePrefs.isEnabled(this)
         val text = if (meshEnabled)
-            "Mesh attiva — rete P2P in ascolto"
+            "Mesh active — P2P network listening"
         else
-            "Monitoraggio passivo SOS attivo (mesh disattivata)"
+            "Passive SOS monitoring active (mesh disabled)"
         return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setContentTitle("TrekMesh")
             .setContentText(text)

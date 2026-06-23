@@ -135,7 +135,7 @@ fun buildMessageCard(context: Context, msg: ChatMessage): View {
 
     // Bottoni gestione SOS — solo per rifugi
     if (isSos && isRifugio) {
-        val localName = UserRolePrefs.getStoredRifugioName(context) ?: "Rifugio"
+        val localName = UserRolePrefs.getStoredRifugioName(context) ?: "Mountain Hut"
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(0, 8, 0, 0)
@@ -143,7 +143,7 @@ fun buildMessageCard(context: Context, msg: ChatMessage): View {
         when {
             !isAcknowledged && !isResolved -> {
                 row.addView(Button(context).apply {
-                    text = "Prendi in carico"
+                    text = "Take charge"
                     textSize = 12f
                     setOnClickListener {
                         TrekMeshBus.sendSosStatusUpdate(msg.id, "ACKNOWLEDGED", localName)
@@ -153,7 +153,7 @@ fun buildMessageCard(context: Context, msg: ChatMessage): View {
             }
             isAcknowledged -> {
                 row.addView(Button(context).apply {
-                    text = "Segna come risolto"
+                    text = "Mark as resolved"
                     textSize = 12f
                     setOnClickListener {
                         TrekMeshBus.sendSosStatusUpdate(msg.id, "RESOLVED", localName)
@@ -173,9 +173,9 @@ fun buildMessageCard(context: Context, msg: ChatMessage): View {
             else         -> 0xFFF44336.toInt()  // rosso
         }
         val ttlLabel = when {
-            msg.ttl <= 0 -> "scaduto"
-            msg.ttl == 1 -> "1 salto"
-            else         -> "${msg.ttl} salti"
+            msg.ttl <= 0 -> "expired"
+            msg.ttl == 1 -> "1 hop"
+            else         -> "${msg.ttl} hops"
         }
         card.addView(TextView(context).apply {
             text = "↔ $ttlLabel"
