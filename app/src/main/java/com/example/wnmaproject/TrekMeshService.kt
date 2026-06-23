@@ -812,7 +812,7 @@ class TrekMeshService : Service() {
                 ownMessageIds.add(msg.id)
                 persistMessage(msg, "PENDING")
                 TrekMeshBus.emitMessage(msg.id, localEndpointName, msg.type, msg.priority,
-                    msg.text, msg.description, msg.imagePath, lat, lon, alt, isOwn = true)
+                    msg.text, msg.description, msg.imagePath, lat, lon, alt, isOwn = true, ttl = ttl)
 
                 if (msg.type == "SOS" && msg.priority >= 3) {
                     forceHighPowerScan()
