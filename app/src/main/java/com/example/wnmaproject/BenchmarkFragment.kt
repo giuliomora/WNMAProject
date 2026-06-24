@@ -20,13 +20,12 @@ class BenchmarkFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        val tvLog    = view.findViewById<TextView>(R.id.tv_bench_log)
-        val tvPeers  = view.findViewById<TextView>(R.id.tv_bench_peers)
-        val tvMode   = view.findViewById<TextView>(R.id.tv_bench_mode)
-        val tvBatt   = view.findViewById<TextView>(R.id.tv_battery)
-        val scroll   = view.findViewById<ScrollView>(R.id.scroll_bench_log)
+        val tvLog   = view.findViewById<TextView>(R.id.tv_bench_log)
+        val tvPeers = view.findViewById<TextView>(R.id.tv_bench_peers)
+        val tvMode  = view.findViewById<TextView>(R.id.tv_bench_mode)
+        val tvBatt  = view.findViewById<TextView>(R.id.tv_battery)
+        val scroll  = view.findViewById<ScrollView>(R.id.scroll_bench_log)
 
-        // Live battery display
         val bm = requireContext().getSystemService(BatteryManager::class.java)
         fun refreshBattery() {
             val pct = bm?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
@@ -50,19 +49,33 @@ class BenchmarkFragment : Fragment() {
             }
         }
 
-        // Scan mode hint (derived from Log events — just show last SCAN_START line)
+        // Scan mode from last SCAN_START log line
         viewLifecycleOwner.lifecycleScope.launch {
             TrekMeshBus.benchmarkLog.collect { lines ->
-                val lastScan = lines.lastOrNull { it.contains("SCAN_START") }
+                val last = lines.lastOrNull { it.contains("SCAN_START") }
                 tvMode.text = when {
-                    lastScan?.contains("HIGH_POWER") == true -> "Mode: HIGH POWER (BT+WiFi)"
-                    lastScan?.contains("LOW_POWER")  == true -> "Mode: LOW POWER (BT only)"
+                    last?.contains("HIGH_POWER") == true -> "Mode: HIGH POWER (BT+WiFi)"
+                    last?.contains("LOW_POWER")  == true -> "Mode: LOW POWER (BT only)"
                     else -> "Mode: —"
                 }
             }
         }
 
-        // Packet loss test
+        // Discovery & Recovery
+        view.findViewById<Button>(R.id.btn_rediscovery).setOnClickListener {
+            BenchmarkLogger.log("--- Force Re-Discovery triggered by user ---")
+            TrekMeshBus.triggerBenchControl(TrekMeshBus.BenchControl.REDISCOVERY)
+        }
+        view.findViewById<Button>(R.id.btn_recovery_10s).setOnClickListener {
+            BenchmarkLogger.log("--- Recovery test (10s blackout) triggered by user ---")
+            TrekMeshBus.triggerBenchControl(TrekMeshBus.BenchControl.RECOVERY_10S)
+        }
+        view.findViewById<Button>(R.id.btn_recovery_30s).setOnClickListener {
+            BenchmarkLogger.log("--- Recovery test (30s blackout) triggered by user ---")
+            TrekMeshBus.triggerBenchControl(TrekMeshBus.BenchControl.RECOVERY_30S)
+        }
+
+        // Packet loss
         view.findViewById<Button>(R.id.btn_packet_loss).setOnClickListener {
             refreshBattery()
             TrekMeshBus.triggerBenchPing(50)

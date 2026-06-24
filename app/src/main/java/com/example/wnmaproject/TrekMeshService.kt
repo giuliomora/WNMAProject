@@ -172,6 +172,8 @@ class TrekMeshService : Service() {
     private val disconnectedAt = mutableMapOf<String, Long>()
     // Benchmark: incoming BENCH_PING counters (testId -> received count)
     private val benchPingCounts = mutableMapOf<String, Int>()
+    // Benchmark: ACK round-trip tracking (msgId -> sentAt ms)
+    private val msgSentAt = mutableMapOf<String, Long>()
 
     private val connectedEndpoints = java.util.concurrent.CopyOnWriteArraySet<String>()
     private val connectionRetries = mutableMapOf<String, Int>()
@@ -444,6 +446,9 @@ class TrekMeshService : Service() {
         if (parts.size < 3) return
         val (_, originalMsgId, ackerName) = parts
         if (!ownMessageIds.remove(originalMsgId)) return // ACK per un messaggio non nostro, ignora
+        msgSentAt.remove(originalMsgId)?.let { sentAt ->
+            BenchmarkLogger.log("ACK_RTT msgId=${originalMsgId.take(8)} rtt=${System.currentTimeMillis() - sentAt}ms peer=$ackerName")
+        }
         serviceScope.launch { db.messageDao().updateStatus(originalMsgId, "DELIVERED") }
         TrekMeshBus.updateMessageStatus(originalMsgId, "DELIVERED")
         TrekMeshBus.emitLog("Message delivered to $ackerName")
@@ -527,6 +532,7 @@ class TrekMeshService : Service() {
         listenForDeleteMessages()
         listenForSafetyActions()
         listenForBenchPingTrigger()
+        listenForBenchControl()
         startPeriodicCleanup()
         startBleBeaconing()
         
@@ -907,9 +913,10 @@ class TrekMeshService : Service() {
         val (filePayload, filePayloadId) = buildFilePayload(msg.imagePath)
         val wire = msg.toWireFormat(filePayloadId)
         val bytesPayload = Payload.fromBytes(wire.toByteArray(Charsets.UTF_8))
-        
+        msgSentAt[msg.id] = System.currentTimeMillis()
+        BenchmarkLogger.log("MSG_SENT id=${msg.id.take(8)} type=${msg.type} peers=${connectedEndpoints.size} ts=${System.currentTimeMillis()}")
+
         connectedEndpoints.forEach { endpointId ->
-            // Invia immediatamente
             connectionsClient.sendPayload(endpointId, bytesPayload)
             filePayload?.let { connectionsClient.sendPayload(endpointId, it) }
         }
@@ -1091,6 +1098,46 @@ class TrekMeshService : Service() {
                 BenchmarkLogger.log("PACKET_LOSS SENT $total pings in ${sendMs}ms (waiting for PONG...)")
             }
         }
+    }
+
+    private fun listenForBenchControl() {
+        serviceScope.launch {
+            TrekMeshBus.benchControl.collect { ctrl ->
+                when (ctrl) {
+                    TrekMeshBus.BenchControl.REDISCOVERY   -> runRediscoveryTest()
+                    TrekMeshBus.BenchControl.RECOVERY_10S  -> runRecoveryTest(10_000L)
+                    TrekMeshBus.BenchControl.RECOVERY_30S  -> runRecoveryTest(30_000L)
+                }
+            }
+        }
+    }
+
+    private suspend fun runRediscoveryTest() {
+        val peers = connectedEndpoints.size
+        BenchmarkLogger.log("REDISCOVERY_TEST START peers=$peers ts=${System.currentTimeMillis()}")
+        connectionsClient.stopAllEndpoints()
+        connectedEndpoints.clear()
+        pendingEndpoints.clear()
+        TrekMeshBus.updatePeerCount(0)
+        delay(500)
+        // SCAN_START + ENDPOINT_FOUND logs will capture discovery time automatically
+        startNetworking(highPower = false)
+        BenchmarkLogger.log("REDISCOVERY_TEST scanning... (watch ENDPOINT_FOUND for delta)")
+    }
+
+    private suspend fun runRecoveryTest(blackoutMs: Long) {
+        val peers = connectedEndpoints.size
+        val blackoutSec = blackoutMs / 1000
+        BenchmarkLogger.log("RECOVERY_TEST START peers=$peers blackout=${blackoutSec}s ts=${System.currentTimeMillis()}")
+        connectionsClient.stopAllEndpoints()
+        connectedEndpoints.clear()
+        pendingEndpoints.clear()
+        TrekMeshBus.updatePeerCount(0)
+        BenchmarkLogger.log("RECOVERY_TEST BLACKOUT for ${blackoutSec}s...")
+        delay(blackoutMs)
+        BenchmarkLogger.log("RECOVERY_TEST RECONNECTING ts=${System.currentTimeMillis()} (HIGH_POWER mode)")
+        // High power for faster recovery, RECONNECT_OK will log elapsed since RECONNECT_LOST
+        startNetworking(highPower = true)
     }
 
     private fun startAdaptiveScanning() {
