@@ -184,6 +184,8 @@ class TrekMeshService : Service() {
     private val benchThroughputRecv = mutableMapOf<String, BenchThruState>()
     // Benchmark: RSSI map from BLE scanner (deviceHash -> rssi, timestamp)
     private val lastRssiByHash = mutableMapOf<String, Pair<Int, Long>>()
+    // Benchmark: timestamp of last startNetworking() call, used to compute discovery time
+    private var scanStartedAt = 0L
 
     private val connectedEndpoints = java.util.concurrent.CopyOnWriteArraySet<String>()
     private val connectionRetries = mutableMapOf<String, Int>()
@@ -205,7 +207,7 @@ class TrekMeshService : Service() {
         override fun onConnectionInitiated(endpointId: String, connectionInfo: ConnectionInfo) {
             Log.i(LOG_TAG, "Connessione iniziata da ${connectionInfo.endpointName}")
             TrekMeshBus.emitLog("Incoming connection from ${connectionInfo.endpointName}, accepting...")
-            BenchmarkLogger.start("discovery:${connectionInfo.endpointName}")
+            BenchmarkLogger.start("conn_handshake:${connectionInfo.endpointName}")
             pendingEndpoints.add(endpointId)
             endpointNames[endpointId] = connectionInfo.endpointName
             connectionsClient.acceptConnection(endpointId, payloadCallback)
@@ -226,9 +228,9 @@ class TrekMeshService : Service() {
                 connectionRetries.remove(endpointId)
                 TrekMeshBus.updatePeerCount(connectedEndpoints.size)
                 TrekMeshBus.emitLog("Connected to $name")
-                val connLatencyMs = BenchmarkLogger.stopAndGet("discovery:$name")
+                val connLatencyMs = BenchmarkLogger.stopAndGet("conn_handshake:$name")
                 if (connLatencyMs != null)
-                    BenchmarkLogger.log("CONN_LATENCY peer=$name ms=$connLatencyMs (onConnectionInitiated→onConnectionResult)")
+                    BenchmarkLogger.log("CONN_HANDSHAKE peer=$name ms=$connLatencyMs (onConnectionInitiated→onConnectionResult)")
                 disconnectedAt.remove(name)?.let { lostAt ->
                     val reconnectMs = System.currentTimeMillis() - lostAt
                     BenchmarkLogger.log("RECONNECT_OK name=$name elapsed=${reconnectMs}ms")
@@ -287,7 +289,9 @@ class TrekMeshService : Service() {
             if (endpointId in connectedEndpoints || endpointId in pendingEndpoints) return
             if (endpointNames.values.contains(info.endpointName)) return
             val mode = if (currentScanMode == ScanMode.HIGH_POWER) "HIGH_POWER" else "LOW_POWER"
-            BenchmarkLogger.log("ENDPOINT_FOUND name=${info.endpointName} mode=$mode ts=${System.currentTimeMillis()}")
+            val foundAt = System.currentTimeMillis()
+            val discoveryMs = if (scanStartedAt > 0) foundAt - scanStartedAt else -1L
+            BenchmarkLogger.log("ENDPOINT_FOUND name=${info.endpointName} mode=$mode discoveryTime=${discoveryMs}ms ts=$foundAt")
             TrekMeshBus.emitLog("Device found: ${info.endpointName}, requesting connection...")
             pendingEndpoints.add(endpointId)
             endpointNames[endpointId] = info.endpointName
@@ -1302,7 +1306,8 @@ class TrekMeshService : Service() {
 
     private fun startNetworking(highPower: Boolean) {
         val mode = if (highPower) "HIGH_POWER(BT+WiFi)" else "LOW_POWER(BT)"
-        BenchmarkLogger.log("SCAN_START mode=$mode ts=${System.currentTimeMillis()}")
+        scanStartedAt = System.currentTimeMillis()
+        BenchmarkLogger.log("SCAN_START mode=$mode ts=$scanStartedAt")
         connectionsClient.stopAdvertising()
         connectionsClient.stopDiscovery()
 
