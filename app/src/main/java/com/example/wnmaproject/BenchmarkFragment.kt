@@ -56,13 +56,13 @@ class BenchmarkFragment : Fragment() {
             BenchmarkLogger.log("--- Re-Discovery triggered (adaptive mode) ---")
             TrekMeshBus.triggerBenchControl(TrekMeshBus.BenchControl.REDISCOVERY)
         }
-        view.findViewById<Button>(R.id.btn_rediscovery_low).setOnClickListener {
-            BenchmarkLogger.log("--- Discovery LOW POWER triggered ---")
-            TrekMeshBus.triggerBenchControl(TrekMeshBus.BenchControl.REDISCOVERY_LOW_POWER)
+        view.findViewById<Button>(R.id.btn_rediscovery_series_low).setOnClickListener {
+            BenchmarkLogger.log("--- Discovery ×10 LOW POWER series triggered ---")
+            TrekMeshBus.triggerBenchControl(TrekMeshBus.BenchControl.REDISCOVERY_SERIES_LOW)
         }
-        view.findViewById<Button>(R.id.btn_rediscovery_high).setOnClickListener {
-            BenchmarkLogger.log("--- Discovery HIGH POWER triggered ---")
-            TrekMeshBus.triggerBenchControl(TrekMeshBus.BenchControl.REDISCOVERY_HIGH_POWER)
+        view.findViewById<Button>(R.id.btn_rediscovery_series_high).setOnClickListener {
+            BenchmarkLogger.log("--- Discovery ×10 HIGH POWER series triggered ---")
+            TrekMeshBus.triggerBenchControl(TrekMeshBus.BenchControl.REDISCOVERY_SERIES_HIGH)
         }
         view.findViewById<Button>(R.id.btn_recovery_10s).setOnClickListener {
             BenchmarkLogger.log("--- Recovery test 10s blackout triggered ---")

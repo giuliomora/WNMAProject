@@ -113,23 +113,23 @@
             android:paddingBottom="4dp">
 
             <Button
-                android:id="@+id/btn_rediscovery_low"
+                android:id="@+id/btn_rediscovery_series_low"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_marginEnd="4dp"
-                android:text="Discovery LOW"
+                android:text="×10 LOW"
                 android:backgroundTint="#0D47A1"
                 android:textColor="#FFFFFF"
                 android:textSize="11sp" />
 
             <Button
-                android:id="@+id/btn_rediscovery_high"
+                android:id="@+id/btn_rediscovery_series_high"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_marginStart="4dp"
-                android:text="Discovery HIGH"
+                android:text="×10 HIGH"
                 android:backgroundTint="#1B5E20"
                 android:textColor="#FFFFFF"
                 android:textSize="11sp" />

@@ -1124,10 +1124,10 @@ class TrekMeshService : Service() {
         serviceScope.launch {
             TrekMeshBus.benchControl.collect { ctrl ->
                 when (ctrl) {
-                    TrekMeshBus.BenchControl.REDISCOVERY           -> runRediscoveryTest()
-                    TrekMeshBus.BenchControl.REDISCOVERY_LOW_POWER -> runRediscoveryTest(highPower = false)
-                    TrekMeshBus.BenchControl.REDISCOVERY_HIGH_POWER-> runRediscoveryTest(highPower = true)
-                    TrekMeshBus.BenchControl.RECOVERY_10S          -> runRecoveryTest(10_000L)
+                    TrekMeshBus.BenchControl.REDISCOVERY             -> runRediscoveryTest()
+                    TrekMeshBus.BenchControl.REDISCOVERY_SERIES_LOW -> runRediscoverySeriesTest(highPower = false)
+                    TrekMeshBus.BenchControl.REDISCOVERY_SERIES_HIGH -> runRediscoverySeriesTest(highPower = true)
+                    TrekMeshBus.BenchControl.RECOVERY_10S           -> runRecoveryTest(10_000L)
                     TrekMeshBus.BenchControl.RECOVERY_30S          -> runRecoveryTest(30_000L)
                     TrekMeshBus.BenchControl.THROUGHPUT_100K       -> runThroughputTest(100)
                     TrekMeshBus.BenchControl.THROUGHPUT_500K       -> runThroughputTest(500)
@@ -1251,6 +1251,59 @@ class TrekMeshService : Service() {
         delay(500)
         startNetworking(highPower = highPower)
         BenchmarkLogger.log("REDISCOVERY_TEST scanning in $mode mode... (watch ENDPOINT_FOUND discoveryTime)")
+    }
+
+    private suspend fun runRediscoverySeriesTest(highPower: Boolean, count: Int = 10) {
+        val mode = if (highPower) "HIGH_POWER" else "LOW_POWER"
+        val bm = getSystemService(android.os.BatteryManager::class.java)
+        val battStart = bm?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+        val seriesStart = System.currentTimeMillis()
+        val discoveryTimes = mutableListOf<Long>()
+
+        BenchmarkLogger.log("REDISCOVERY_SERIES START mode=$mode count=$count battery=$battStart%")
+
+        repeat(count) { i ->
+            BenchmarkLogger.log("REDISCOVERY_SERIES iter=${i + 1}/$count")
+            connectionsClient.stopAllEndpoints()
+            connectedEndpoints.clear()
+            pendingEndpoints.clear()
+            TrekMeshBus.updatePeerCount(0)
+            delay(1_000) // let disconnect settle
+
+            val iterStart = System.currentTimeMillis()
+            startNetworking(highPower = highPower) // also resets scanStartedAt
+
+            // Poll until first peer connects or 60s timeout
+            val deadline = iterStart + 60_000L
+            while (connectedEndpoints.isEmpty() && System.currentTimeMillis() < deadline) {
+                delay(250)
+            }
+
+            if (connectedEndpoints.isNotEmpty()) {
+                val elapsed = System.currentTimeMillis() - iterStart
+                discoveryTimes.add(elapsed)
+                BenchmarkLogger.log("REDISCOVERY_SERIES iter=${i + 1} OK elapsed=${elapsed}ms")
+            } else {
+                BenchmarkLogger.log("REDISCOVERY_SERIES iter=${i + 1} TIMEOUT (no peer in 60s)")
+            }
+
+            delay(2_000) // pause before next iteration
+        }
+
+        val battEnd = bm?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+        val totalSec = (System.currentTimeMillis() - seriesStart) / 1000
+
+        BenchmarkLogger.log("━━━ REDISCOVERY_SERIES RESULT mode=$mode ━━━")
+        if (discoveryTimes.isNotEmpty()) {
+            val avg = discoveryTimes.average().toLong()
+            val min = discoveryTimes.min()
+            val max = discoveryTimes.max()
+            BenchmarkLogger.log("  success=${discoveryTimes.size}/$count  avg=${avg}ms  min=${min}ms  max=${max}ms")
+        } else {
+            BenchmarkLogger.log("  success=0/$count (all iterations timed out)")
+        }
+        BenchmarkLogger.log("  battery: $battStart% → $battEnd% (consumed ${battStart - battEnd}% in ${totalSec}s)")
+        BenchmarkLogger.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     }
 
     private suspend fun runRecoveryTest(blackoutMs: Long) {
