@@ -1,8 +1,11 @@
 package com.example.trekmesh
 
 import android.app.ActivityManager
+import android.bluetooth.BluetoothManager
 import android.content.Intent
+import android.net.wifi.WifiManager
 import android.os.Bundle
+import android.provider.Settings
 import android.view.View
 import android.widget.Button
 import android.widget.TextView
@@ -118,6 +121,30 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         updateMeshStatusBar(TrekMeshBus.peerCount.value)
+        checkRadiosEnabled()
+    }
+
+    private fun checkRadiosEnabled() {
+        val btEnabled = getSystemService(BluetoothManager::class.java)
+            ?.adapter?.isEnabled == true
+        @Suppress("DEPRECATION")
+        val wifiEnabled = getSystemService(WifiManager::class.java)?.isWifiEnabled == true
+
+        if (btEnabled && wifiEnabled) return
+
+        val missing = buildList {
+            if (!btEnabled) add("Bluetooth")
+            if (!wifiEnabled) add("Wi-Fi")
+        }.joinToString(" and ")
+
+        AlertDialog.Builder(this)
+            .setTitle("⚠️ Enable $missing")
+            .setMessage("TrekMesh needs $missing to discover and connect to nearby devices. Please enable $missing to use the mesh network.")
+            .setPositiveButton("Open Settings") { _, _ ->
+                startActivity(Intent(Settings.ACTION_WIRELESS_SETTINGS))
+            }
+            .setNegativeButton("Ignore", null)
+            .show()
     }
 
     private fun updateMeshStatusBar(peerCount: Int) {
