@@ -159,10 +159,12 @@ object TrekMeshBus {
     fun triggerBenchPing(count: Int) { _benchPingTrigger.tryEmit(count) }
 
     enum class BenchControl {
-        REDISCOVERY, RECOVERY_10S, RECOVERY_30S,
+        REDISCOVERY,
         REDISCOVERY_SERIES_LOW, REDISCOVERY_SERIES_HIGH,
-        THROUGHPUT_100K, THROUGHPUT_500K,
-        STRESS_10_MSGS,
+        RECOVERY_SERIES,
+        THROUGHPUT_SERIES_100K, THROUGHPUT_SERIES_500K,
+        PACKET_LOSS_SERIES,
+        STRESS_SERIES,
         RSSI_SNAPSHOT
     }
     private val _benchControl = MutableSharedFlow<BenchControl>(extraBufferCapacity = 4)

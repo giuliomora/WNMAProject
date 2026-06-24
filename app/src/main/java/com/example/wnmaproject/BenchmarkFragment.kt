@@ -13,7 +13,7 @@ import kotlinx.coroutines.launch
 
 class BenchmarkFragment : Fragment() {
 
-    private var batteryStartPct = -1
+    private var batteryStartPct = -1f
     private var batteryStartTime = 0L
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View =
@@ -27,11 +27,11 @@ class BenchmarkFragment : Fragment() {
         val tvBatt  = view.findViewById<TextView>(R.id.tv_battery)
 
         val bm = requireContext().getSystemService(BatteryManager::class.java)
-        fun battery() = bm?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
-        fun refreshBattery() { tvBatt.text = "🔋 ${battery()}%" }
+        fun batteryFloat(): Float =
+            (bm?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1).toFloat()
+        fun refreshBattery() { tvBatt.text = "🔋 ${"%.1f".format(batteryFloat())}%" }
         refreshBattery()
 
-        // Live peer count
         viewLifecycleOwner.lifecycleScope.launch {
             TrekMeshBus.peerCount.collect { count ->
                 tvPeers.text = "● Peers: $count"
@@ -39,7 +39,6 @@ class BenchmarkFragment : Fragment() {
             }
         }
 
-        // Scan mode label from last SCAN_START entry
         viewLifecycleOwner.lifecycleScope.launch {
             TrekMeshBus.benchmarkLog.collect { lines ->
                 val last = lines.lastOrNull { it.contains("SCAN_START") }
@@ -53,24 +52,20 @@ class BenchmarkFragment : Fragment() {
 
         // ── DISCOVERY & RECOVERY ──
         view.findViewById<Button>(R.id.btn_rediscovery).setOnClickListener {
-            BenchmarkLogger.log("--- Re-Discovery triggered (adaptive mode) ---")
+            BenchmarkLogger.log("--- Re-Discovery triggered ---")
             TrekMeshBus.triggerBenchControl(TrekMeshBus.BenchControl.REDISCOVERY)
         }
+        view.findViewById<Button>(R.id.btn_recovery_series).setOnClickListener {
+            BenchmarkLogger.log("--- Blackout ×5 (10s) series triggered ---")
+            TrekMeshBus.triggerBenchControl(TrekMeshBus.BenchControl.RECOVERY_SERIES)
+        }
         view.findViewById<Button>(R.id.btn_rediscovery_series_low).setOnClickListener {
-            BenchmarkLogger.log("--- Discovery ×10 LOW POWER series triggered ---")
+            BenchmarkLogger.log("--- Discovery ×10 LOW POWER triggered ---")
             TrekMeshBus.triggerBenchControl(TrekMeshBus.BenchControl.REDISCOVERY_SERIES_LOW)
         }
         view.findViewById<Button>(R.id.btn_rediscovery_series_high).setOnClickListener {
-            BenchmarkLogger.log("--- Discovery ×10 HIGH POWER series triggered ---")
+            BenchmarkLogger.log("--- Discovery ×10 HIGH POWER triggered ---")
             TrekMeshBus.triggerBenchControl(TrekMeshBus.BenchControl.REDISCOVERY_SERIES_HIGH)
-        }
-        view.findViewById<Button>(R.id.btn_recovery_10s).setOnClickListener {
-            BenchmarkLogger.log("--- Recovery test 10s blackout triggered ---")
-            TrekMeshBus.triggerBenchControl(TrekMeshBus.BenchControl.RECOVERY_10S)
-        }
-        view.findViewById<Button>(R.id.btn_recovery_30s).setOnClickListener {
-            BenchmarkLogger.log("--- Recovery test 30s blackout triggered ---")
-            TrekMeshBus.triggerBenchControl(TrekMeshBus.BenchControl.RECOVERY_30S)
         }
         view.findViewById<Button>(R.id.btn_rssi_snap).setOnClickListener {
             TrekMeshBus.triggerBenchControl(TrekMeshBus.BenchControl.RSSI_SNAPSHOT)
@@ -78,45 +73,44 @@ class BenchmarkFragment : Fragment() {
 
         // ── THROUGHPUT ──
         view.findViewById<Button>(R.id.btn_throughput_100k).setOnClickListener {
-            BenchmarkLogger.log("--- Throughput test 100KB triggered ---")
-            TrekMeshBus.triggerBenchControl(TrekMeshBus.BenchControl.THROUGHPUT_100K)
+            BenchmarkLogger.log("--- Throughput ×5 100KB triggered ---")
+            TrekMeshBus.triggerBenchControl(TrekMeshBus.BenchControl.THROUGHPUT_SERIES_100K)
         }
         view.findViewById<Button>(R.id.btn_throughput_500k).setOnClickListener {
-            BenchmarkLogger.log("--- Throughput test 500KB triggered ---")
-            TrekMeshBus.triggerBenchControl(TrekMeshBus.BenchControl.THROUGHPUT_500K)
+            BenchmarkLogger.log("--- Throughput ×5 500KB triggered ---")
+            TrekMeshBus.triggerBenchControl(TrekMeshBus.BenchControl.THROUGHPUT_SERIES_500K)
         }
 
         // ── TRAFFIC & STRESS ──
         view.findViewById<Button>(R.id.btn_packet_loss).setOnClickListener {
-            refreshBattery()
-            TrekMeshBus.triggerBenchPing(50)
+            BenchmarkLogger.log("--- Packet Loss ×5 triggered ---")
+            TrekMeshBus.triggerBenchControl(TrekMeshBus.BenchControl.PACKET_LOSS_SERIES)
         }
         view.findViewById<Button>(R.id.btn_stress).setOnClickListener {
-            BenchmarkLogger.log("--- Stress test 10 msgs triggered ---")
-            TrekMeshBus.triggerBenchControl(TrekMeshBus.BenchControl.STRESS_10_MSGS)
+            BenchmarkLogger.log("--- Stress ×5 triggered ---")
+            TrekMeshBus.triggerBenchControl(TrekMeshBus.BenchControl.STRESS_SERIES)
         }
 
-        // ── BATTERY DIFFERENTIAL ──
+        // ── BATTERY DIFFERENTIAL (manual) ──
         view.findViewById<Button>(R.id.btn_battery_start).setOnClickListener {
-            batteryStartPct  = battery()
+            batteryStartPct  = batteryFloat()
             batteryStartTime = System.currentTimeMillis()
-            BenchmarkLogger.log("BATTERY_DIFF START: $batteryStartPct% at ts=$batteryStartTime")
+            BenchmarkLogger.log("BATTERY_DIFF START: ${"%.1f".format(batteryStartPct)}%")
             refreshBattery()
         }
         view.findViewById<Button>(R.id.btn_battery_end).setOnClickListener {
-            if (batteryStartPct < 0) {
-                BenchmarkLogger.log("BATTERY_DIFF: press 'Battery Start' first")
+            if (batteryStartPct < 0f) {
+                BenchmarkLogger.log("BATTERY_DIFF: press Battery Start first")
                 return@setOnClickListener
             }
-            val nowPct = battery()
+            val nowPct  = batteryFloat()
             val elapsed = System.currentTimeMillis() - batteryStartTime
             val diff    = batteryStartPct - nowPct
-            val mins    = elapsed / 60_000
-            val rate    = if (mins > 0) "%.2f".format(diff.toFloat() / mins) else "N/A"
-            BenchmarkLogger.log("BATTERY_DIFF END: $nowPct% | consumed $diff% in ${mins}min | rate $rate%/min")
-            batteryStartPct = -1
+            val mins    = elapsed / 60_000.0
+            val rate    = if (mins > 0) "%.2f".format(diff / mins) else "N/A"
+            BenchmarkLogger.log("BATTERY_DIFF END: ${"%.1f".format(nowPct)}% | consumed ${"%.1f".format(diff)}% in ${"%.1f".format(mins)}min | $rate%/min")
+            batteryStartPct = -1f
             refreshBattery()
         }
-
     }
 }

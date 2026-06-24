@@ -93,13 +93,13 @@
                 android:textSize="11sp" />
 
             <Button
-                android:id="@+id/btn_recovery_10s"
+                android:id="@+id/btn_recovery_series"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_marginStart="4dp"
-                android:text="Blackout 10s"
-                android:backgroundTint="#E65100"
+                android:text="Blackout ×5"
+                android:backgroundTint="#BF360C"
                 android:textColor="#FFFFFF"
                 android:textSize="11sp" />
         </LinearLayout>
@@ -138,28 +138,14 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
             android:paddingStart="8dp"
             android:paddingEnd="8dp"
             android:paddingBottom="4dp">
 
             <Button
-                android:id="@+id/btn_recovery_30s"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginEnd="4dp"
-                android:text="Blackout 30s"
-                android:backgroundTint="#BF360C"
-                android:textColor="#FFFFFF"
-                android:textSize="11sp" />
-
-            <Button
                 android:id="@+id/btn_rssi_snap"
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginStart="4dp"
                 android:text="RSSI Snapshot"
                 android:backgroundTint="#4527A0"
                 android:textColor="#FFFFFF"
@@ -192,7 +178,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_marginEnd="4dp"
-                android:text="Throughput 100KB"
+                android:text="×5  100KB"
                 android:backgroundTint="#00695C"
                 android:textColor="#FFFFFF"
                 android:textSize="11sp" />
@@ -203,7 +189,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_marginStart="4dp"
-                android:text="Throughput 500KB"
+                android:text="×5  500KB"
                 android:backgroundTint="#004D40"
                 android:textColor="#FFFFFF"
                 android:textSize="11sp" />
@@ -235,7 +221,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_marginEnd="4dp"
-                android:text="Packet Loss (50)"
+                android:text="×5  Packet Loss"
                 android:backgroundTint="#2E7D32"
                 android:textColor="#FFFFFF"
                 android:textSize="11sp" />
@@ -246,7 +232,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_marginStart="4dp"
-                android:text="Stress (10 msgs)"
+                android:text="×5  Stress"
                 android:backgroundTint="#6A1B9A"
                 android:textColor="#FFFFFF"
                 android:textSize="11sp" />
@@ -295,7 +281,7 @@
                 android:textSize="11sp" />
         </LinearLayout>
 
-        <!-- hint to open BenchLog tab -->
+        <!-- hint -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
