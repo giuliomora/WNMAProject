@@ -544,7 +544,7 @@ class TrekMeshService : Service() {
                         type = TYPE_BROADCAST,
                         priority = 2,
                         text = weather,
-                        description = "Aggiornamento automatico Rifugio"
+                        description = "Automatic weather update from Rifugio"
                     ))
                 }
                 delay(WEATHER_RELAY_INTERVAL_MS)

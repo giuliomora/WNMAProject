@@ -31,7 +31,7 @@ object WeatherRelay {
             val temp = args.getString("temp")
             
             val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
-            "Bollettino Meteo [$time]: $status, Temp: $temp°C"
+            "Weather Bulletin [$time]: $status, Temp: $temp°C"
         } catch (e: Exception) {
             Log.e(LOG_TAG, "Errore recupero meteo", e)
             null
