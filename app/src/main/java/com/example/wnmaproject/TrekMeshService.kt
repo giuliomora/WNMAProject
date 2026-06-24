@@ -126,7 +126,7 @@ class TrekMeshService : Service() {
     private data class BenchThruState(val total: Int, val firstAt: Long, var received: Int = 0, var totalBytes: Int = 0)
 
     private lateinit var connectionsClient: ConnectionsClient
-    private lateinit var serviceId: String
+    private val serviceId = "com.example.trekmesh"
     private lateinit var localEndpointName: String
     private lateinit var db: TrekMeshDatabase
     private lateinit var imagesDir: File
@@ -503,7 +503,6 @@ class TrekMeshService : Service() {
     override fun onCreate() {
         super.onCreate()
         connectionsClient = Nearby.getConnectionsClient(this)
-        serviceId = packageName
         localEndpointName = generateEndpointName()
         db = TrekMeshDatabase.getInstance(this)
         imagesDir = File(filesDir, "images").also { it.mkdirs() }
