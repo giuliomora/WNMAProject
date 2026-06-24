@@ -783,7 +783,7 @@ class TrekMeshService : Service() {
                         if (!alreadyConnected) {
                             TrekMeshBus.emitLog("🚨 Passive SOS detected$distMsg! (BLE beacon, no active mesh connection)")
                             if (UserRolePrefs.getRole(this@TrekMeshService) == UserRole.RIFUGIO) {
-                                TrekMeshBus.emitLog("Mountain Hut: approach the hiker to establish mesh connection and SOS relay.")
+                                TrekMeshBus.emitLog("Rifugio: approach the hiker to establish mesh connection and SOS relay.")
                             }
                         }
                     }

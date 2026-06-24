@@ -56,7 +56,7 @@ class SettingsActivity : AppCompatActivity() {
 
         findViewById<Button>(R.id.btn_change_role).setOnClickListener {
             val newRole = if (currentRole == UserRole.HIKER) UserRole.RIFUGIO else UserRole.HIKER
-            val newRoleLabel = if (newRole == UserRole.RIFUGIO) "Mountain Hut 🏔️" else "Hiker 🥾"
+            val newRoleLabel = if (newRole == UserRole.RIFUGIO) "Rifugio 🏔️" else "Hiker 🥾"
             AlertDialog.Builder(this)
                 .setTitle("Change role")
                 .setMessage("You are about to switch to $newRoleLabel.\n\nThe mesh service will restart and your network identifier will change. Continue?")
@@ -73,7 +73,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun updateRoleUI(role: UserRole) {
         val icon = if (role == UserRole.RIFUGIO) "🏔️" else "🥾"
-        val label = if (role == UserRole.RIFUGIO) "Mountain Hut" else "Hiker"
+        val label = if (role == UserRole.RIFUGIO) "Rifugio" else "Hiker"
         val color = if (role == UserRole.RIFUGIO) 0xFFFF9800.toInt() else 0xFF4CAF50.toInt()
         findViewById<TextView>(R.id.tv_role_icon).text = icon
         findViewById<TextView>(R.id.tv_current_role).apply {
@@ -81,7 +81,7 @@ class SettingsActivity : AppCompatActivity() {
             setTextColor(color)
         }
         // Aggiorna il testo del pulsante in base al ruolo opposto
-        val nextLabel = if (role == UserRole.RIFUGIO) "→ Hiker" else "→ Mountain Hut"
+        val nextLabel = if (role == UserRole.RIFUGIO) "→ Hiker" else "→ Rifugio"
         findViewById<Button>(R.id.btn_change_role).text = nextLabel
     }
 
@@ -95,7 +95,7 @@ class SettingsActivity : AppCompatActivity() {
         val role = UserRolePrefs.getRole(this) ?: UserRole.HIKER
 
         if (role == UserRole.RIFUGIO) {
-            val name = UserRolePrefs.getStoredRifugioName(this) ?: "Mountain Hut"
+            val name = UserRolePrefs.getStoredRifugioName(this) ?: "Rifugio"
             tvName.text = name
             btnEdit.visibility = android.view.View.VISIBLE
             btnEdit.setOnClickListener { showEditNameDialog(tvName) }

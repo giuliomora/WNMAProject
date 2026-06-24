@@ -188,7 +188,7 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Mountain Hut"
+                            android:text="Rifugio"
                             android:textSize="20sp"
                             android:textStyle="bold"
                             android:textColor="#FFFFFF" />
@@ -253,7 +253,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="52dp"
                     android:layout_marginTop="20dp"
-                    android:text="I am a Mountain Hut"
+                    android:text="I am a Rifugio"
                     android:textSize="15sp"
                     android:backgroundTint="#FF9800"
                     android:textColor="#FFFFFF" />

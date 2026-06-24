@@ -135,7 +135,7 @@ fun buildMessageCard(context: Context, msg: ChatMessage): View {
 
     // Bottoni gestione SOS — solo per rifugi
     if (isSos && isRifugio) {
-        val localName = UserRolePrefs.getStoredRifugioName(context) ?: "Mountain Hut"
+        val localName = UserRolePrefs.getStoredRifugioName(context) ?: "Rifugio"
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(0, 8, 0, 0)

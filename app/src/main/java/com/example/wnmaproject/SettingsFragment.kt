@@ -64,7 +64,7 @@ class SettingsFragment : Fragment() {
 
         view.findViewById<Button>(R.id.btn_change_role).setOnClickListener {
             val newRole = if (currentRole == UserRole.HIKER) UserRole.RIFUGIO else UserRole.HIKER
-            val newRoleLabel = if (newRole == UserRole.RIFUGIO) "Mountain Hut 🏔️" else "Hiker 🥾"
+            val newRoleLabel = if (newRole == UserRole.RIFUGIO) "Rifugio 🏔️" else "Hiker 🥾"
             AlertDialog.Builder(requireContext())
                 .setTitle("Change role")
                 .setMessage("You are about to switch to $newRoleLabel.\n\nThe mesh service will restart and your network identifier will change. Continue?")
@@ -81,14 +81,14 @@ class SettingsFragment : Fragment() {
 
     private fun updateRoleUI(view: View, role: UserRole) {
         val icon = if (role == UserRole.RIFUGIO) "🏔️" else "🥾"
-        val label = if (role == UserRole.RIFUGIO) "Mountain Hut" else "Hiker"
+        val label = if (role == UserRole.RIFUGIO) "Rifugio" else "Hiker"
         val color = if (role == UserRole.RIFUGIO) 0xFFFF9800.toInt() else 0xFF4CAF50.toInt()
         view.findViewById<TextView>(R.id.tv_role_icon).text = icon
         view.findViewById<TextView>(R.id.tv_current_role).apply {
             text = label
             setTextColor(color)
         }
-        val nextLabel = if (role == UserRole.RIFUGIO) "→ Hiker" else "→ Mountain Hut"
+        val nextLabel = if (role == UserRole.RIFUGIO) "→ Hiker" else "→ Rifugio"
         view.findViewById<Button>(R.id.btn_change_role).text = nextLabel
     }
 
@@ -98,7 +98,7 @@ class SettingsFragment : Fragment() {
         val role = UserRolePrefs.getRole(requireContext()) ?: UserRole.HIKER
 
         if (role == UserRole.RIFUGIO) {
-            val name = UserRolePrefs.getStoredRifugioName(requireContext()) ?: "Mountain Hut"
+            val name = UserRolePrefs.getStoredRifugioName(requireContext()) ?: "Rifugio"
             tvName.text = name
             tvName.setTextColor(0xFFFFFFFF.toInt())
             btnEdit.visibility = View.VISIBLE
