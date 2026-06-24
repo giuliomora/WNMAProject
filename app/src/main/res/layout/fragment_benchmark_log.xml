@@ -47,12 +47,12 @@
         android:paddingBottom="4dp">
 
         <Button
-            android:id="@+id/btn_benchlog_export"
+            android:id="@+id/btn_benchlog_share"
             android:layout_width="0dp"
             android:layout_height="36dp"
             android:layout_weight="1"
             android:layout_marginEnd="4dp"
-            android:text="Show Path"
+            android:text="⬆ Share Log"
             android:backgroundTint="#1565C0"
             android:textColor="#FFFFFF"
             android:textSize="11sp" />
