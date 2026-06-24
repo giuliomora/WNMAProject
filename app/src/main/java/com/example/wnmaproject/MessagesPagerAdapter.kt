@@ -8,12 +8,15 @@ class MessagesPagerAdapter(activity: FragmentActivity, private val showLog: Bool
     FragmentStateAdapter(activity) {
 
     private val showBench = BuildConfig.BENCHMARK_MODE
+    // In benchmark build, Bench tab replaces Log tab
+    private val effectiveShowLog = showLog && !showBench
 
-    // Release/Debug: Received, Sent, [Log,] Settings
-    // Benchmark:     Received, Sent, [Log,] Bench, Settings
+    // Debug:     Received, Sent, Log, Settings
+    // Benchmark: Received, Sent, Bench, Settings
+    // Release:   Received, Sent, Settings
     override fun getItemCount(): Int {
         var count = 2 // Received + Sent
-        if (showLog) count++ // Log
+        if (effectiveShowLog) count++ // Log
         if (showBench) count++ // Bench
         count++ // Settings
         return count
@@ -25,7 +28,7 @@ class MessagesPagerAdapter(activity: FragmentActivity, private val showLog: Bool
         idx--
         if (idx == 0) return SentMessagesFragment()
         idx--
-        if (showLog) {
+        if (effectiveShowLog) {
             if (idx == 0) return LogFragment()
             idx--
         }

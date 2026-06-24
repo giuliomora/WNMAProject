@@ -53,10 +53,10 @@ class MainActivity : AppCompatActivity() {
         viewPager.adapter = MessagesPagerAdapter(this, showLog = isDebug)
 
         val isBench = BuildConfig.BENCHMARK_MODE
-        // Build tab label list matching MessagesPagerAdapter order
+        // Bench tab replaces Log in benchmark builds; Log only in debug-only builds
         val tabLabels = buildList {
             add("Received"); add("Sent")
-            if (isDebug) add("Log")
+            if (isDebug && !isBench) add("Log")
             if (isBench) add("Bench")
             add("Settings")
         }
