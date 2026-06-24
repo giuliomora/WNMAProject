@@ -110,7 +110,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun showEditNameDialog(tvName: TextView) {
         val input = EditText(this).apply {
             setText(tvName.text)
-            hint = "Mountain hut name"
+            hint = "Nome rifugio"
             setPadding(48, 32, 48, 32)
         }
         AlertDialog.Builder(this)

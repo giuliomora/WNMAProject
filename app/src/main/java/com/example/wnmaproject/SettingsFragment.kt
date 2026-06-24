@@ -116,7 +116,7 @@ class SettingsFragment : Fragment() {
     private fun showEditNameDialog(tvName: TextView) {
         val input = EditText(requireContext()).apply {
             setText(tvName.text)
-            hint = "Mountain hut name"
+            hint = "Nome rifugio"
             setPadding(48, 32, 48, 32)
         }
         AlertDialog.Builder(requireContext())

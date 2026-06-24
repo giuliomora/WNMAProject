@@ -1035,7 +1035,7 @@ class TrekMeshService : Service() {
 
     private suspend fun sendEncountersToRifugio(endpointId: String) {
         if (!EncounterLogger.hasEncounters(this)) {
-            TrekMeshBus.emitLog("📋 No encounters to send to mountain hut")
+            TrekMeshBus.emitLog("📋 No encounters to send to rifugio")
             return
         }
         val data = EncounterLogger.popEncounters(this) ?: return
@@ -1043,7 +1043,7 @@ class TrekMeshService : Service() {
         Log.d(LOG_TAG, "Invio encounters al rifugio ($endpointId):\n$csvText")
         val payload = "$TYPE_ENCOUNTERS|$localEndpointName|$csvText"
         connectionsClient.sendPayload(endpointId, Payload.fromBytes(payload.toByteArray(Charsets.UTF_8)))
-        TrekMeshBus.emitLog("📋 ${csvText.trim().lines().size} encounters sent to mountain hut")
+        TrekMeshBus.emitLog("📋 ${csvText.trim().lines().size} encounters sent to rifugio")
     }
 
     private fun handleIncomingEncounters(endpointId: String, raw: String) {
