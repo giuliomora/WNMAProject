@@ -1398,7 +1398,7 @@ class TrekMeshService : Service() {
             connectedEndpoints.clear()
             pendingEndpoints.clear()
             TrekMeshBus.updatePeerCount(0)
-            delay(500) // let disconnect settle
+            delay(3_000) // let GMS settle before next startNetworking()
 
             val iterStart = System.currentTimeMillis()
             startNetworking(highPower = highPower)
