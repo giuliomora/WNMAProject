@@ -226,7 +226,9 @@ class TrekMeshService : Service() {
                 connectionRetries.remove(endpointId)
                 TrekMeshBus.updatePeerCount(connectedEndpoints.size)
                 TrekMeshBus.emitLog("Connected to $name")
-                BenchmarkLogger.stop("discovery:$name")
+                val connLatencyMs = BenchmarkLogger.stopAndGet("discovery:$name")
+                if (connLatencyMs != null)
+                    BenchmarkLogger.log("CONN_LATENCY peer=$name ms=$connLatencyMs (onConnectionInitiated→onConnectionResult)")
                 disconnectedAt.remove(name)?.let { lostAt ->
                     val reconnectMs = System.currentTimeMillis() - lostAt
                     BenchmarkLogger.log("RECONNECT_OK name=$name elapsed=${reconnectMs}ms")

@@ -51,6 +51,15 @@ object BenchmarkLogger {
         emit("[$label] DONE ${System.currentTimeMillis() - start}ms")
     }
 
+    /** Like stop() but also returns the elapsed ms (null if not started or not in BENCHMARK_MODE). */
+    fun stopAndGet(label: String): Long? {
+        if (!BuildConfig.BENCHMARK_MODE) return null
+        val start = timers.remove(label) ?: return null
+        val elapsed = System.currentTimeMillis() - start
+        emit("[$label] DONE ${elapsed}ms")
+        return elapsed
+    }
+
     fun log(msg: String) {
         if (!BuildConfig.BENCHMARK_MODE) return
         emit(msg)
