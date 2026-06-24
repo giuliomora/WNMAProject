@@ -20,6 +20,15 @@ android {
         buildConfigField("String", "PC_API_KEY", "\"${project.findProperty("PC_API_KEY") ?: ""}\"")
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
@@ -33,6 +42,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
             resValue("string", "app_name_variant", "TrekMesh")
             buildConfigField("Boolean", "BENCHMARK_MODE", "false")
         }
