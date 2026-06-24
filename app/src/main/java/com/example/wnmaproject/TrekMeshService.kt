@@ -426,7 +426,7 @@ class TrekMeshService : Service() {
                     dao = db.pendingAlertDao()
                 )
                 if (relayed) {
-                    TrekMeshBus.emitLog("SOS forwarded to "Protezione Civile" ✓")
+                    TrekMeshBus.emitLog("SOS forwarded to \"Protezione Civile\" ✓")
                     showRelayConfirmNotification(sender)
                 }
             }
@@ -887,7 +887,7 @@ class TrekMeshService : Service() {
                                 dao = db.pendingAlertDao()
                             )
                             if (relayed) {
-                                TrekMeshBus.emitLog("SOS forwarded to "Protezione Civile" ✓")
+                                TrekMeshBus.emitLog("SOS forwarded to \"Protezione Civile\" ✓")
                                 showRelayConfirmNotification(localEndpointName)
                             }
                         }
@@ -1275,7 +1275,7 @@ class TrekMeshService : Service() {
     fun showRelayConfirmNotification(sender: String) {
         val nm = getSystemService(NotificationManager::class.java) ?: return
         val notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_RELAY_ID)
-            .setContentTitle("✅ SOS forwarded to "Protezione Civile"")
+            .setContentTitle("✅ SOS forwarded to \"Protezione Civile\"")
             .setContentText("The SOS from $sender has been successfully transmitted.")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
