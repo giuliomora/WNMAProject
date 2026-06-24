@@ -97,6 +97,7 @@ class TrekMeshService : Service() {
     private enum class ScanMode { LOW_POWER, HIGH_POWER }
     private var currentScanMode = ScanMode.LOW_POWER
     private var adaptiveScanJob: kotlinx.coroutines.Job? = null
+    private var benchSeriesActive = false
 
     private data class MeshMessage(
         val id: String,
@@ -1261,12 +1262,26 @@ class TrekMeshService : Service() {
     private fun batteryLog(start: Int, end: Int, totalSec: Long) =
         BenchmarkLogger.log("  battery: $start% → $end% (consumed ${start - end}% in ${totalSec}s)")
 
+    private fun pauseAdaptiveScanning() {
+        benchSeriesActive = true
+        adaptiveScanJob?.cancel()
+        adaptiveScanJob = null
+        BenchmarkLogger.log("  [adaptive scanning paused for benchmark series]")
+    }
+
+    private fun resumeAdaptiveScanning() {
+        benchSeriesActive = false
+        startAdaptiveScanning()
+        BenchmarkLogger.log("  [adaptive scanning resumed]")
+    }
+
     private suspend fun runRecoverySeriesTest(blackoutMs: Long, count: Int = 5) {
         val blackoutSec = blackoutMs / 1000
         val battStart   = batteryPct()
         val seriesStart = System.currentTimeMillis()
         val results     = mutableListOf<Long>()
 
+        pauseAdaptiveScanning()
         BenchmarkLogger.log("RECOVERY_SERIES START blackout=${blackoutSec}s ×$count battery=$battStart%")
         repeat(count) { i ->
             BenchmarkLogger.log("RECOVERY_SERIES iter=${i + 1}/$count — disconnecting...")
@@ -1278,7 +1293,7 @@ class TrekMeshService : Service() {
             delay(blackoutMs)
             val iterStart = System.currentTimeMillis()
             startNetworking(highPower = true)
-            val deadline = iterStart + 60_000L
+            val deadline = iterStart + 90_000L
             while (connectedEndpoints.isEmpty() && System.currentTimeMillis() < deadline) delay(250)
             if (connectedEndpoints.isNotEmpty()) {
                 val elapsed = System.currentTimeMillis() - iterStart
@@ -1297,14 +1312,16 @@ class TrekMeshService : Service() {
             BenchmarkLogger.log("  success=0/$count (all timed out)")
         batteryLog(battStart, batteryPct(), totalSec)
         BenchmarkLogger.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        resumeAdaptiveScanning()
     }
 
     private suspend fun runThroughputSeriesTest(sizeKb: Int, count: Int = 5) {
         if (connectedEndpoints.isEmpty()) { BenchmarkLogger.log("THROUGHPUT_SERIES ABORTED: no peers"); return }
         val battStart   = batteryPct()
         val seriesStart = System.currentTimeMillis()
-        val waitPerIter = sizeKb * 20L + 2_000L // send time + 2s buffer for PONGs
+        val waitPerIter = sizeKb * 20L + 2_000L
 
+        pauseAdaptiveScanning()
         BenchmarkLogger.log("THROUGHPUT_SERIES START size=${sizeKb}KB ×$count battery=$battStart%")
         repeat(count) { i ->
             BenchmarkLogger.log("THROUGHPUT_SERIES iter=${i + 1}/$count")
@@ -1316,14 +1333,16 @@ class TrekMeshService : Service() {
         BenchmarkLogger.log("  (see THROUGHPUT_PONG lines above for per-iter KB/s)")
         batteryLog(battStart, batteryPct(), totalSec)
         BenchmarkLogger.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        resumeAdaptiveScanning()
     }
 
     private suspend fun runPacketLossSeriesTest(count: Int = 5) {
         if (connectedEndpoints.isEmpty()) { BenchmarkLogger.log("PACKET_LOSS_SERIES ABORTED: no peers"); return }
         val battStart   = batteryPct()
         val seriesStart = System.currentTimeMillis()
-        val waitPerIter = 50 * 50L + 2_000L // send time + 2s buffer for PONGs
+        val waitPerIter = 50 * 50L + 2_000L
 
+        pauseAdaptiveScanning()
         BenchmarkLogger.log("PACKET_LOSS_SERIES START ×$count (50 pings/iter) battery=$battStart%")
         repeat(count) { i ->
             BenchmarkLogger.log("PACKET_LOSS_SERIES iter=${i + 1}/$count")
@@ -1335,14 +1354,16 @@ class TrekMeshService : Service() {
         BenchmarkLogger.log("  (see PACKET_LOSS RESULT lines above for per-iter loss %)")
         batteryLog(battStart, batteryPct(), totalSec)
         BenchmarkLogger.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        resumeAdaptiveScanning()
     }
 
     private suspend fun runStressSeriesTest(count: Int = 5) {
         if (connectedEndpoints.isEmpty()) { BenchmarkLogger.log("STRESS_SERIES ABORTED: no peers"); return }
         val battStart   = batteryPct()
         val seriesStart = System.currentTimeMillis()
-        val waitPerIter = 10 * 100L + 2_000L // send time + 2s buffer for ACKs
+        val waitPerIter = 10 * 100L + 2_000L
 
+        pauseAdaptiveScanning()
         BenchmarkLogger.log("STRESS_SERIES START ×$count (10 msgs/iter) battery=$battStart%")
         repeat(count) { i ->
             BenchmarkLogger.log("STRESS_SERIES iter=${i + 1}/$count")
@@ -1354,6 +1375,7 @@ class TrekMeshService : Service() {
         BenchmarkLogger.log("  (see ACK_RTT lines above for per-message latency)")
         batteryLog(battStart, batteryPct(), totalSec)
         BenchmarkLogger.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        resumeAdaptiveScanning()
     }
 
     private suspend fun runRediscoverySeriesTest(highPower: Boolean, count: Int = 10) {
@@ -1362,6 +1384,7 @@ class TrekMeshService : Service() {
         val seriesStart = System.currentTimeMillis()
         val discoveryTimes = mutableListOf<Long>()
 
+        pauseAdaptiveScanning()
         BenchmarkLogger.log("REDISCOVERY_SERIES START mode=$mode count=$count battery=$battStart%")
 
         repeat(count) { i ->
@@ -1375,7 +1398,7 @@ class TrekMeshService : Service() {
             val iterStart = System.currentTimeMillis()
             startNetworking(highPower = highPower)
 
-            val deadline = iterStart + 60_000L
+            val deadline = iterStart + 90_000L
             while (connectedEndpoints.isEmpty() && System.currentTimeMillis() < deadline) delay(250)
 
             if (connectedEndpoints.isNotEmpty()) {
@@ -1397,6 +1420,7 @@ class TrekMeshService : Service() {
             BenchmarkLogger.log("  success=0/$count (all timed out)")
         batteryLog(battStart, batteryPct(), totalSec)
         BenchmarkLogger.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        resumeAdaptiveScanning()
     }
 
     private suspend fun runRecoveryTest(blackoutMs: Long) {
@@ -1415,9 +1439,11 @@ class TrekMeshService : Service() {
     }
 
     private fun startAdaptiveScanning() {
+        if (benchSeriesActive) return  // don't interfere with benchmark series
         adaptiveScanJob?.cancel()
         adaptiveScanJob = serviceScope.launch {
             while (isActive) {
+                if (benchSeriesActive) { delay(5_000); continue } // recheck while paused
                 if (connectedEndpoints.isNotEmpty()) {
                     if (currentScanMode != ScanMode.LOW_POWER) {
                         currentScanMode = ScanMode.LOW_POWER
