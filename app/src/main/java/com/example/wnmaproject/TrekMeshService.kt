@@ -543,6 +543,7 @@ class TrekMeshService : Service() {
         listenForResolveVotes()
         listenForDeleteMessages()
         listenForSafetyActions()
+        BenchmarkLogger.init(this)
         listenForBenchPingTrigger()
         listenForBenchControl()
         startPeriodicCleanup()

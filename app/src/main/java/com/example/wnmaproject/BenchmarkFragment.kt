@@ -6,7 +6,6 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
-import android.widget.ScrollView
 import android.widget.TextView
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
@@ -23,7 +22,6 @@ class BenchmarkFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        val tvLog   = view.findViewById<TextView>(R.id.tv_bench_log)
         val tvPeers = view.findViewById<TextView>(R.id.tv_bench_peers)
         val tvMode  = view.findViewById<TextView>(R.id.tv_bench_mode)
         val tvBatt  = view.findViewById<TextView>(R.id.tv_battery)
@@ -38,13 +36,6 @@ class BenchmarkFragment : Fragment() {
             TrekMeshBus.peerCount.collect { count ->
                 tvPeers.text = "● Peers: $count"
                 tvPeers.setTextColor(if (count > 0) 0xFF4CAF50.toInt() else 0xFF888888.toInt())
-            }
-        }
-
-        // Benchmark log + scroll to bottom
-        viewLifecycleOwner.lifecycleScope.launch {
-            TrekMeshBus.benchmarkLog.collect { lines ->
-                tvLog.text = lines.joinToString("\n")
             }
         }
 
@@ -119,9 +110,5 @@ class BenchmarkFragment : Fragment() {
             refreshBattery()
         }
 
-        // ── CLEAR ──
-        view.findViewById<Button>(R.id.btn_clear_bench).setOnClickListener {
-            TrekMeshBus.clearBenchLog()
-        }
     }
 }

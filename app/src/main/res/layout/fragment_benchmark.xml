@@ -264,47 +264,16 @@
                 android:textSize="11sp" />
         </LinearLayout>
 
-        <!-- Clear -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:paddingBottom="4dp">
-
-            <Button
-                android:id="@+id/btn_clear_bench"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Clear Log"
-                android:backgroundTint="#1A1A1A"
-                android:textColor="#666666"
-                android:textSize="11sp" />
-        </LinearLayout>
-
-        <!-- Log -->
+        <!-- hint to open BenchLog tab -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="BENCHMARK LOG"
-            android:textSize="10sp"
-            android:textColor="#666666"
-            android:letterSpacing="0.1"
-            android:paddingStart="12dp"
-            android:paddingBottom="4dp" />
-
-        <TextView
-            android:id="@+id/tv_bench_log"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:minHeight="300dp"
-            android:background="#0D0D0D"
-            android:padding="8dp"
-            android:text=""
-            android:textColor="#B0B0B0"
+            android:text="→ See BenchLog tab for the full log"
             android:textSize="11sp"
-            android:fontFamily="monospace"
-            android:lineSpacingMultiplier="1.4" />
+            android:textColor="#555555"
+            android:gravity="center"
+            android:paddingTop="8dp"
+            android:paddingBottom="12dp" />
 
     </LinearLayout>
 </ScrollView>

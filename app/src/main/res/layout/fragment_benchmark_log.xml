@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#121212">
+
+    <!-- File path bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        android:gravity="center_vertical"
+        android:background="#1E1E1E">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="File:"
+            android:textColor="#666666"
+            android:textSize="10sp"
+            android:layout_marginEnd="4dp" />
+
+        <TextView
+            android:id="@+id/tv_benchlog_path"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="5"
+            android:text="—"
+            android:textColor="#888888"
+            android:textSize="9sp"
+            android:fontFamily="monospace"
+            android:singleLine="true"
+            android:ellipsize="start" />
+    </LinearLayout>
+
+    <!-- Action buttons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="4dp">
+
+        <Button
+            android:id="@+id/btn_benchlog_export"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:text="Show Path"
+            android:backgroundTint="#1565C0"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp" />
+
+        <Button
+            android:id="@+id/btn_benchlog_clear"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:text="Clear"
+            android:backgroundTint="#263238"
+            android:textColor="#888888"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <!-- Scrollable log -->
+    <ScrollView
+        android:id="@+id/scroll_benchlog"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="#0A0A0A"
+        android:padding="8dp">
+
+        <TextView
+            android:id="@+id/tv_benchlog_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#B0B0B0"
+            android:textSize="11sp"
+            android:fontFamily="monospace"
+            android:lineSpacingMultiplier="1.4" />
+    </ScrollView>
+
+</LinearLayout>
