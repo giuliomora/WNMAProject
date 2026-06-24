@@ -81,6 +81,8 @@ class TrekMeshService : Service() {
         private const val TYPE_ENCOUNTERS    = "ENCOUNTERS"
         private const val TYPE_BENCH_PING    = "BENCH_PING"
         private const val TYPE_BENCH_PONG    = "BENCH_PONG"
+        private const val TYPE_BENCH_THRU    = "BENCH_THRU"
+        private const val TYPE_BENCH_THRU_PONG = "BENCH_THRU_PONG"
         private const val FIELD_SEP = "" // ASCII Unit Separator
 
         private const val SCAN_LOW_POWER_MS = 3 * 60 * 1000L // 3 minuti solo BT
@@ -119,6 +121,8 @@ class TrekMeshService : Service() {
         fun toEntity(status: String = "PENDING") =
             MessageEntity(id, sender, ttl, type, priority, text, description, imagePath, lat, lon, alt, status)
     }
+
+    private data class BenchThruState(val total: Int, val firstAt: Long, var received: Int = 0, var totalBytes: Int = 0)
 
     private lateinit var connectionsClient: ConnectionsClient
     private lateinit var serviceId: String
@@ -174,6 +178,12 @@ class TrekMeshService : Service() {
     private val benchPingCounts = mutableMapOf<String, Int>()
     // Benchmark: ACK round-trip tracking (msgId -> sentAt ms)
     private val msgSentAt = mutableMapOf<String, Long>()
+    // Benchmark: throughput sender (testId -> sentAt, totalBytes)
+    private val benchThroughputSentAt = mutableMapOf<String, Pair<Long, Int>>()
+    // Benchmark: throughput receiver (testId -> receivedCount, total, firstReceivedAt, totalBytes)
+    private val benchThroughputRecv = mutableMapOf<String, BenchThruState>()
+    // Benchmark: RSSI map from BLE scanner (deviceHash -> rssi, timestamp)
+    private val lastRssiByHash = mutableMapOf<String, Pair<Int, Long>>()
 
     private val connectedEndpoints = java.util.concurrent.CopyOnWriteArraySet<String>()
     private val connectionRetries = mutableMapOf<String, Int>()
@@ -305,8 +315,10 @@ class TrekMeshService : Service() {
                         TYPE_RESOLVE_VOTE -> handleResolveVote(endpointId, raw)
                         TYPE_DELETE_MSG  -> handleDeleteMsg(endpointId, raw)
                         TYPE_ENCOUNTERS  -> handleIncomingEncounters(endpointId, raw)
-                        TYPE_BENCH_PING  -> handleBenchPing(endpointId, raw)
-                        TYPE_BENCH_PONG  -> handleBenchPong(raw)
+                        TYPE_BENCH_PING      -> handleBenchPing(endpointId, raw)
+                        TYPE_BENCH_PONG      -> handleBenchPong(raw)
+                        TYPE_BENCH_THRU      -> handleBenchThru(endpointId, raw)
+                        TYPE_BENCH_THRU_PONG -> handleBenchThruPong(raw)
                         else -> Log.w(LOG_TAG, "Tipo sconosciuto da $endpointId")
                     }
                 }
@@ -770,6 +782,7 @@ class TrekMeshService : Service() {
                 
                 val key = remoteIdHash.toString()
                 val now = System.currentTimeMillis()
+                lastRssiByHash[key] = Pair(result.rssi, now)
                 
                 if (remoteStatus == 1) {
                     val lastSeen = seenBeaconIds[key] ?: 0L
@@ -1104,11 +1117,117 @@ class TrekMeshService : Service() {
         serviceScope.launch {
             TrekMeshBus.benchControl.collect { ctrl ->
                 when (ctrl) {
-                    TrekMeshBus.BenchControl.REDISCOVERY   -> runRediscoveryTest()
-                    TrekMeshBus.BenchControl.RECOVERY_10S  -> runRecoveryTest(10_000L)
-                    TrekMeshBus.BenchControl.RECOVERY_30S  -> runRecoveryTest(30_000L)
+                    TrekMeshBus.BenchControl.REDISCOVERY      -> runRediscoveryTest()
+                    TrekMeshBus.BenchControl.RECOVERY_10S     -> runRecoveryTest(10_000L)
+                    TrekMeshBus.BenchControl.RECOVERY_30S     -> runRecoveryTest(30_000L)
+                    TrekMeshBus.BenchControl.THROUGHPUT_100K  -> runThroughputTest(100)
+                    TrekMeshBus.BenchControl.THROUGHPUT_500K  -> runThroughputTest(500)
+                    TrekMeshBus.BenchControl.STRESS_10_MSGS   -> runStressTest(10)
+                    TrekMeshBus.BenchControl.RSSI_SNAPSHOT    -> logRssiSnapshot()
                 }
             }
+        }
+    }
+
+    // ── Throughput: sends N×1KB pings, receiver echoes BENCH_THRU_PONG with RTT ──
+
+    private suspend fun runThroughputTest(sizeKb: Int) {
+        if (connectedEndpoints.isEmpty()) {
+            BenchmarkLogger.log("THROUGHPUT ABORTED: no connected peers")
+            return
+        }
+        val testId = java.util.UUID.randomUUID().toString().take(8)
+        val padding = "X".repeat(1000) // ~1 KB per ping
+        val pings = sizeKb
+        BenchmarkLogger.log("THROUGHPUT_TEST START testId=$testId size=${sizeKb}KB pings=$pings peers=${connectedEndpoints.size}")
+        val sentAt = System.currentTimeMillis()
+        benchThroughputSentAt[testId] = Pair(sentAt, pings * padding.length)
+        for (seq in 0 until pings) {
+            val wire = "$TYPE_BENCH_THRU|$testId|$seq|$pings|$padding"
+            val payload = Payload.fromBytes(wire.toByteArray())
+            connectedEndpoints.forEach { connectionsClient.sendPayload(it, payload) }
+            delay(20)
+        }
+        BenchmarkLogger.log("THROUGHPUT_TEST all $pings pings sent in ${System.currentTimeMillis() - sentAt}ms — waiting THRU_PONG...")
+    }
+
+    private fun handleBenchThru(endpointId: String, raw: String) {
+        val parts = raw.split("|", limit = 5)
+        if (parts.size < 4) return
+        val testId = parts[1]
+        val seq    = parts[2].toIntOrNull() ?: return
+        val total  = parts[3].toIntOrNull() ?: return
+        val state  = benchThroughputRecv.getOrPut(testId) {
+            BenchThruState(total = total, firstAt = System.currentTimeMillis())
+        }
+        state.received++
+        state.totalBytes += raw.length
+        if (state.received == total) {
+            val elapsed = System.currentTimeMillis() - state.firstAt
+            val kbps = if (elapsed > 0) state.totalBytes / 1024.0 / elapsed * 1000 else 0.0
+            BenchmarkLogger.log("THROUGHPUT_RECV testId=$testId received=${state.totalBytes}B in ${elapsed}ms = ${"%.1f".format(kbps)} KB/s")
+            val pong = "$TYPE_BENCH_THRU_PONG|$testId|${state.totalBytes}|$elapsed"
+            connectionsClient.sendPayload(endpointId, Payload.fromBytes(pong.toByteArray()))
+            benchThroughputRecv.remove(testId)
+        }
+    }
+
+    private fun handleBenchThruPong(raw: String) {
+        val parts = raw.split("|")
+        if (parts.size < 4) return
+        val testId  = parts[1]
+        val bytes   = parts[2].toIntOrNull() ?: return
+        val elapsed = parts[3].toLongOrNull() ?: return
+        val kbps = if (elapsed > 0) bytes / 1024.0 / elapsed * 1000 else 0.0
+        BenchmarkLogger.log("THROUGHPUT_PONG testId=$testId rcv=${bytes}B in ${elapsed}ms = ${"%.1f".format(kbps)} KB/s")
+        benchThroughputSentAt.remove(testId)?.let { (sentAt, _) ->
+            val rtt = System.currentTimeMillis() - sentAt
+            BenchmarkLogger.log("THROUGHPUT_RTT testId=$testId sender-side total=${rtt}ms")
+        }
+    }
+
+    // ── Stress: rapid-fire 10 messages through normal mesh path ──
+
+    private suspend fun runStressTest(count: Int) {
+        if (connectedEndpoints.isEmpty()) {
+            BenchmarkLogger.log("STRESS_TEST ABORTED: no connected peers")
+            return
+        }
+        val role = getSharedPreferences("settings", MODE_PRIVATE).getString("role", "HIKER") ?: "HIKER"
+        val sender = getSharedPreferences("settings", MODE_PRIVATE).getString("node_name", android.os.Build.MODEL) ?: android.os.Build.MODEL
+        BenchmarkLogger.log("STRESS_TEST START msgs=$count peers=${connectedEndpoints.size}")
+        val startAt = System.currentTimeMillis()
+        repeat(count) { i ->
+            val msg = MeshMessage(
+                id       = java.util.UUID.randomUUID().toString(),
+                sender   = sender,
+                ttl      = 3,
+                type     = "INFO",
+                priority = 1,
+                text     = "[STRESS ${"${i+1}".padStart(2,'0')}/$count]"
+            )
+            seenMessageIds.add(msg.id)
+            ownMessageIds.add(msg.id)
+            msgSentAt[msg.id] = System.currentTimeMillis()
+            sendToAll(msg)
+            delay(100)
+        }
+        BenchmarkLogger.log("STRESS_TEST all $count sent in ${System.currentTimeMillis() - startAt}ms — watch ACK_RTT lines for latency")
+    }
+
+    // ── RSSI snapshot from BLE scanner ──
+
+    private fun logRssiSnapshot() {
+        val now = System.currentTimeMillis()
+        val recent = lastRssiByHash.filter { now - it.value.second < 30_000 }
+        if (recent.isEmpty()) {
+            BenchmarkLogger.log("RSSI_SNAPSHOT: no BLE devices seen in last 30s")
+            return
+        }
+        BenchmarkLogger.log("RSSI_SNAPSHOT ts=$now devices=${recent.size}")
+        recent.forEach { (hash, pair) ->
+            val age = (now - pair.second) / 1000
+            BenchmarkLogger.log("  RSSI device=$hash rssi=${pair.first}dBm age=${age}s")
         }
     }
 
