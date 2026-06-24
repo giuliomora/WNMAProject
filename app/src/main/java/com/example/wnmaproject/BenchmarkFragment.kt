@@ -13,7 +13,7 @@ import kotlinx.coroutines.launch
 
 class BenchmarkFragment : Fragment() {
 
-    private var batteryStartPct = -1f
+    private var batteryStartPct = -1
     private var batteryStartTime = 0L
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View =
@@ -27,9 +27,8 @@ class BenchmarkFragment : Fragment() {
         val tvBatt  = view.findViewById<TextView>(R.id.tv_battery)
 
         val bm = requireContext().getSystemService(BatteryManager::class.java)
-        fun batteryFloat(): Float =
-            (bm?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1).toFloat()
-        fun refreshBattery() { tvBatt.text = "🔋 ${"%.1f".format(batteryFloat())}%" }
+        fun battery() = bm?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+        fun refreshBattery() { tvBatt.text = "🔋 ${battery()}%" }
         refreshBattery()
 
         viewLifecycleOwner.lifecycleScope.launch {
@@ -93,23 +92,23 @@ class BenchmarkFragment : Fragment() {
 
         // ── BATTERY DIFFERENTIAL (manual) ──
         view.findViewById<Button>(R.id.btn_battery_start).setOnClickListener {
-            batteryStartPct  = batteryFloat()
+            batteryStartPct  = battery()
             batteryStartTime = System.currentTimeMillis()
-            BenchmarkLogger.log("BATTERY_DIFF START: ${"%.1f".format(batteryStartPct)}%")
+            BenchmarkLogger.log("BATTERY_DIFF START: $batteryStartPct%")
             refreshBattery()
         }
         view.findViewById<Button>(R.id.btn_battery_end).setOnClickListener {
-            if (batteryStartPct < 0f) {
+            if (batteryStartPct < 0) {
                 BenchmarkLogger.log("BATTERY_DIFF: press Battery Start first")
                 return@setOnClickListener
             }
-            val nowPct  = batteryFloat()
+            val nowPct  = battery()
             val elapsed = System.currentTimeMillis() - batteryStartTime
             val diff    = batteryStartPct - nowPct
             val mins    = elapsed / 60_000.0
             val rate    = if (mins > 0) "%.2f".format(diff / mins) else "N/A"
-            BenchmarkLogger.log("BATTERY_DIFF END: ${"%.1f".format(nowPct)}% | consumed ${"%.1f".format(diff)}% in ${"%.1f".format(mins)}min | $rate%/min")
-            batteryStartPct = -1f
+            BenchmarkLogger.log("BATTERY_DIFF END: $nowPct% | consumed $diff% in ${"%.1f".format(mins)}min | $rate%/min")
+            batteryStartPct = -1
             refreshBattery()
         }
     }

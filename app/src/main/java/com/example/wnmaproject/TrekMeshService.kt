@@ -1253,21 +1253,21 @@ class TrekMeshService : Service() {
         BenchmarkLogger.log("REDISCOVERY_TEST scanning in $mode mode... (watch ENDPOINT_FOUND discoveryTime)")
     }
 
-    // Returns battery % with one decimal place using µAh counters when available
-    private fun batteryPctFloat(): Float {
-        val bm = getSystemService(android.os.BatteryManager::class.java) ?: return -1f
-        return bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY).toFloat()
+    private fun batteryPct(): Int {
+        val bm = getSystemService(android.os.BatteryManager::class.java) ?: return -1
+        return bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
     }
 
-    private fun Float.fmt() = "%.1f".format(this)
+    private fun batteryLog(start: Int, end: Int, totalSec: Long) =
+        BenchmarkLogger.log("  battery: $start% → $end% (consumed ${start - end}% in ${totalSec}s)")
 
     private suspend fun runRecoverySeriesTest(blackoutMs: Long, count: Int = 5) {
         val blackoutSec = blackoutMs / 1000
-        val battStart   = batteryPctFloat()
+        val battStart   = batteryPct()
         val seriesStart = System.currentTimeMillis()
         val results     = mutableListOf<Long>()
 
-        BenchmarkLogger.log("RECOVERY_SERIES START blackout=${blackoutSec}s ×$count battery=${battStart.fmt()}%")
+        BenchmarkLogger.log("RECOVERY_SERIES START blackout=${blackoutSec}s ×$count battery=$battStart%")
         repeat(count) { i ->
             BenchmarkLogger.log("RECOVERY_SERIES iter=${i + 1}/$count — disconnecting...")
             connectionsClient.stopAllEndpoints()
@@ -1285,89 +1285,80 @@ class TrekMeshService : Service() {
                 results.add(elapsed)
                 BenchmarkLogger.log("RECOVERY_SERIES iter=${i + 1} OK reconnected in ${elapsed}ms")
             } else {
-                BenchmarkLogger.log("RECOVERY_SERIES iter=${i + 1} TIMEOUT (no peer in 60s)")
+                BenchmarkLogger.log("RECOVERY_SERIES iter=${i + 1} TIMEOUT")
             }
             delay(2_000)
         }
-        val battEnd  = batteryPctFloat()
         val totalSec = (System.currentTimeMillis() - seriesStart) / 1000
         BenchmarkLogger.log("━━━ RECOVERY_SERIES RESULT blackout=${blackoutSec}s ━━━")
-        if (results.isNotEmpty()) {
+        if (results.isNotEmpty())
             BenchmarkLogger.log("  success=${results.size}/$count  avg=${results.average().toLong()}ms  min=${results.min()}ms  max=${results.max()}ms")
-        } else {
+        else
             BenchmarkLogger.log("  success=0/$count (all timed out)")
-        }
-        BenchmarkLogger.log("  battery: ${battStart.fmt()}% → ${battEnd.fmt()}% (consumed ${"%.1f".format(battStart - battEnd)}% in ${totalSec}s)")
+        batteryLog(battStart, batteryPct(), totalSec)
         BenchmarkLogger.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     }
 
     private suspend fun runThroughputSeriesTest(sizeKb: Int, count: Int = 5) {
         if (connectedEndpoints.isEmpty()) { BenchmarkLogger.log("THROUGHPUT_SERIES ABORTED: no peers"); return }
-        val battStart   = batteryPctFloat()
+        val battStart   = batteryPct()
         val seriesStart = System.currentTimeMillis()
-        // Each iteration: sizeKb pings × 20ms send delay + 5s buffer for PONGs
-        val waitPerIter = sizeKb * 20L + 5_000L
+        val waitPerIter = sizeKb * 20L + 2_000L // send time + 2s buffer for PONGs
 
-        BenchmarkLogger.log("THROUGHPUT_SERIES START size=${sizeKb}KB ×$count battery=${battStart.fmt()}%")
+        BenchmarkLogger.log("THROUGHPUT_SERIES START size=${sizeKb}KB ×$count battery=$battStart%")
         repeat(count) { i ->
             BenchmarkLogger.log("THROUGHPUT_SERIES iter=${i + 1}/$count")
             runThroughputTest(sizeKb)
             delay(waitPerIter)
         }
-        val battEnd  = batteryPctFloat()
         val totalSec = (System.currentTimeMillis() - seriesStart) / 1000
         BenchmarkLogger.log("━━━ THROUGHPUT_SERIES RESULT size=${sizeKb}KB ━━━")
         BenchmarkLogger.log("  (see THROUGHPUT_PONG lines above for per-iter KB/s)")
-        BenchmarkLogger.log("  battery: ${battStart.fmt()}% → ${battEnd.fmt()}% (consumed ${"%.1f".format(battStart - battEnd)}% in ${totalSec}s)")
+        batteryLog(battStart, batteryPct(), totalSec)
         BenchmarkLogger.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     }
 
     private suspend fun runPacketLossSeriesTest(count: Int = 5) {
         if (connectedEndpoints.isEmpty()) { BenchmarkLogger.log("PACKET_LOSS_SERIES ABORTED: no peers"); return }
-        val battStart   = batteryPctFloat()
+        val battStart   = batteryPct()
         val seriesStart = System.currentTimeMillis()
-        // 50 pings × 50ms send delay + 3s buffer for PONGs
-        val waitPerIter = 50 * 50L + 3_000L
+        val waitPerIter = 50 * 50L + 2_000L // send time + 2s buffer for PONGs
 
-        BenchmarkLogger.log("PACKET_LOSS_SERIES START ×$count (50 pings/iter) battery=${battStart.fmt()}%")
+        BenchmarkLogger.log("PACKET_LOSS_SERIES START ×$count (50 pings/iter) battery=$battStart%")
         repeat(count) { i ->
             BenchmarkLogger.log("PACKET_LOSS_SERIES iter=${i + 1}/$count")
             TrekMeshBus.triggerBenchPing(50)
             delay(waitPerIter)
         }
-        val battEnd  = batteryPctFloat()
         val totalSec = (System.currentTimeMillis() - seriesStart) / 1000
         BenchmarkLogger.log("━━━ PACKET_LOSS_SERIES RESULT ━━━")
         BenchmarkLogger.log("  (see PACKET_LOSS RESULT lines above for per-iter loss %)")
-        BenchmarkLogger.log("  battery: ${battStart.fmt()}% → ${battEnd.fmt()}% (consumed ${"%.1f".format(battStart - battEnd)}% in ${totalSec}s)")
+        batteryLog(battStart, batteryPct(), totalSec)
         BenchmarkLogger.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     }
 
     private suspend fun runStressSeriesTest(count: Int = 5) {
         if (connectedEndpoints.isEmpty()) { BenchmarkLogger.log("STRESS_SERIES ABORTED: no peers"); return }
-        val battStart   = batteryPctFloat()
+        val battStart   = batteryPct()
         val seriesStart = System.currentTimeMillis()
-        // 10 msgs × 100ms send delay + 3s buffer for ACKs
-        val waitPerIter = 10 * 100L + 3_000L
+        val waitPerIter = 10 * 100L + 2_000L // send time + 2s buffer for ACKs
 
-        BenchmarkLogger.log("STRESS_SERIES START ×$count (10 msgs/iter) battery=${battStart.fmt()}%")
+        BenchmarkLogger.log("STRESS_SERIES START ×$count (10 msgs/iter) battery=$battStart%")
         repeat(count) { i ->
             BenchmarkLogger.log("STRESS_SERIES iter=${i + 1}/$count")
             runStressTest(10)
             delay(waitPerIter)
         }
-        val battEnd  = batteryPctFloat()
         val totalSec = (System.currentTimeMillis() - seriesStart) / 1000
         BenchmarkLogger.log("━━━ STRESS_SERIES RESULT ━━━")
         BenchmarkLogger.log("  (see ACK_RTT lines above for per-message latency)")
-        BenchmarkLogger.log("  battery: ${battStart.fmt()}% → ${battEnd.fmt()}% (consumed ${"%.1f".format(battStart - battEnd)}% in ${totalSec}s)")
+        batteryLog(battStart, batteryPct(), totalSec)
         BenchmarkLogger.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     }
 
     private suspend fun runRediscoverySeriesTest(highPower: Boolean, count: Int = 10) {
         val mode = if (highPower) "HIGH_POWER" else "LOW_POWER"
-        val bm = getSystemService(android.os.BatteryManager::class.java)
-        val battStart = bm?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+        val battStart = batteryPct()
         val seriesStart = System.currentTimeMillis()
         val discoveryTimes = mutableListOf<Long>()
 
@@ -1379,41 +1370,32 @@ class TrekMeshService : Service() {
             connectedEndpoints.clear()
             pendingEndpoints.clear()
             TrekMeshBus.updatePeerCount(0)
-            delay(1_000) // let disconnect settle
+            delay(500) // let disconnect settle
 
             val iterStart = System.currentTimeMillis()
-            startNetworking(highPower = highPower) // also resets scanStartedAt
+            startNetworking(highPower = highPower)
 
-            // Poll until first peer connects or 60s timeout
             val deadline = iterStart + 60_000L
-            while (connectedEndpoints.isEmpty() && System.currentTimeMillis() < deadline) {
-                delay(250)
-            }
+            while (connectedEndpoints.isEmpty() && System.currentTimeMillis() < deadline) delay(250)
 
             if (connectedEndpoints.isNotEmpty()) {
                 val elapsed = System.currentTimeMillis() - iterStart
                 discoveryTimes.add(elapsed)
                 BenchmarkLogger.log("REDISCOVERY_SERIES iter=${i + 1} OK elapsed=${elapsed}ms")
             } else {
-                BenchmarkLogger.log("REDISCOVERY_SERIES iter=${i + 1} TIMEOUT (no peer in 60s)")
+                BenchmarkLogger.log("REDISCOVERY_SERIES iter=${i + 1} TIMEOUT")
             }
 
-            delay(2_000) // pause before next iteration
+            delay(2_000)
         }
 
-        val battEnd = bm?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
         val totalSec = (System.currentTimeMillis() - seriesStart) / 1000
-
         BenchmarkLogger.log("━━━ REDISCOVERY_SERIES RESULT mode=$mode ━━━")
-        if (discoveryTimes.isNotEmpty()) {
-            val avg = discoveryTimes.average().toLong()
-            val min = discoveryTimes.min()
-            val max = discoveryTimes.max()
-            BenchmarkLogger.log("  success=${discoveryTimes.size}/$count  avg=${avg}ms  min=${min}ms  max=${max}ms")
-        } else {
-            BenchmarkLogger.log("  success=0/$count (all iterations timed out)")
-        }
-        BenchmarkLogger.log("  battery: $battStart% → $battEnd% (consumed ${battStart - battEnd}% in ${totalSec}s)")
+        if (discoveryTimes.isNotEmpty())
+            BenchmarkLogger.log("  success=${discoveryTimes.size}/$count  avg=${discoveryTimes.average().toLong()}ms  min=${discoveryTimes.min()}ms  max=${discoveryTimes.max()}ms")
+        else
+            BenchmarkLogger.log("  success=0/$count (all timed out)")
+        batteryLog(battStart, batteryPct(), totalSec)
         BenchmarkLogger.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     }
 
