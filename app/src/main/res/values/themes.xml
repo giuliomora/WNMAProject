@@ -4,7 +4,6 @@
         <item name="android:windowBackground">#FF000000</item>
         <item name="colorSurface">#FF1E1E1E</item>
         <item name="colorOnSurface">#FFFFFFFF</item>
-        <item name="colorBackground">#FF000000</item>
         <item name="android:colorBackground">#FF000000</item>
         <item name="colorOnBackground">#FFFFFFFF</item>
         <item name="colorPrimary">#FF4CAF50</item>
