@@ -87,7 +87,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_marginEnd="4dp"
-                android:text="Force Re-Discovery"
+                android:text="Re-Discovery"
                 android:backgroundTint="#1565C0"
                 android:textColor="#FFFFFF"
                 android:textSize="11sp" />
@@ -100,6 +100,37 @@
                 android:layout_marginStart="4dp"
                 android:text="Blackout 10s"
                 android:backgroundTint="#E65100"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="4dp">
+
+            <Button
+                android:id="@+id/btn_rediscovery_low"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="4dp"
+                android:text="Discovery LOW"
+                android:backgroundTint="#0D47A1"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp" />
+
+            <Button
+                android:id="@+id/btn_rediscovery_high"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="4dp"
+                android:text="Discovery HIGH"
+                android:backgroundTint="#1B5E20"
                 android:textColor="#FFFFFF"
                 android:textSize="11sp" />
         </LinearLayout>

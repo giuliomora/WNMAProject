@@ -1124,13 +1124,15 @@ class TrekMeshService : Service() {
         serviceScope.launch {
             TrekMeshBus.benchControl.collect { ctrl ->
                 when (ctrl) {
-                    TrekMeshBus.BenchControl.REDISCOVERY      -> runRediscoveryTest()
-                    TrekMeshBus.BenchControl.RECOVERY_10S     -> runRecoveryTest(10_000L)
-                    TrekMeshBus.BenchControl.RECOVERY_30S     -> runRecoveryTest(30_000L)
-                    TrekMeshBus.BenchControl.THROUGHPUT_100K  -> runThroughputTest(100)
-                    TrekMeshBus.BenchControl.THROUGHPUT_500K  -> runThroughputTest(500)
-                    TrekMeshBus.BenchControl.STRESS_10_MSGS   -> runStressTest(10)
-                    TrekMeshBus.BenchControl.RSSI_SNAPSHOT    -> logRssiSnapshot()
+                    TrekMeshBus.BenchControl.REDISCOVERY           -> runRediscoveryTest()
+                    TrekMeshBus.BenchControl.REDISCOVERY_LOW_POWER -> runRediscoveryTest(highPower = false)
+                    TrekMeshBus.BenchControl.REDISCOVERY_HIGH_POWER-> runRediscoveryTest(highPower = true)
+                    TrekMeshBus.BenchControl.RECOVERY_10S          -> runRecoveryTest(10_000L)
+                    TrekMeshBus.BenchControl.RECOVERY_30S          -> runRecoveryTest(30_000L)
+                    TrekMeshBus.BenchControl.THROUGHPUT_100K       -> runThroughputTest(100)
+                    TrekMeshBus.BenchControl.THROUGHPUT_500K       -> runThroughputTest(500)
+                    TrekMeshBus.BenchControl.STRESS_10_MSGS        -> runStressTest(10)
+                    TrekMeshBus.BenchControl.RSSI_SNAPSHOT         -> logRssiSnapshot()
                 }
             }
         }
@@ -1238,17 +1240,17 @@ class TrekMeshService : Service() {
         }
     }
 
-    private suspend fun runRediscoveryTest() {
+    private suspend fun runRediscoveryTest(highPower: Boolean = false) {
+        val mode = if (highPower) "HIGH_POWER" else "LOW_POWER"
         val peers = connectedEndpoints.size
-        BenchmarkLogger.log("REDISCOVERY_TEST START peers=$peers ts=${System.currentTimeMillis()}")
+        BenchmarkLogger.log("REDISCOVERY_TEST START mode=$mode peers=$peers ts=${System.currentTimeMillis()}")
         connectionsClient.stopAllEndpoints()
         connectedEndpoints.clear()
         pendingEndpoints.clear()
         TrekMeshBus.updatePeerCount(0)
         delay(500)
-        // SCAN_START + ENDPOINT_FOUND logs will capture discovery time automatically
-        startNetworking(highPower = false)
-        BenchmarkLogger.log("REDISCOVERY_TEST scanning... (watch ENDPOINT_FOUND for delta)")
+        startNetworking(highPower = highPower)
+        BenchmarkLogger.log("REDISCOVERY_TEST scanning in $mode mode... (watch ENDPOINT_FOUND discoveryTime)")
     }
 
     private suspend fun runRecoveryTest(blackoutMs: Long) {
