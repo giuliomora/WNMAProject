@@ -1271,8 +1271,13 @@ class TrekMeshService : Service() {
 
     private fun resumeAdaptiveScanning() {
         benchSeriesActive = false
+        BenchmarkLogger.log("  [adaptive scanning resumed — restarting networking]")
+        connectionsClient.stopAllEndpoints()
+        connectedEndpoints.clear()
+        pendingEndpoints.clear()
+        TrekMeshBus.updatePeerCount(0)
+        startNetworking(highPower = false)
         startAdaptiveScanning()
-        BenchmarkLogger.log("  [adaptive scanning resumed]")
     }
 
     private suspend fun runRecoverySeriesTest(blackoutMs: Long, count: Int = 5) {
