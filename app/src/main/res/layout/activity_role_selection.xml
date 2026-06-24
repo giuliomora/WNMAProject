@@ -197,7 +197,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="4dp"
-                            android:text="Mesh + Civil Protection relay"
+                            android:text="Mesh + "Protezione Civile" relay"
                             android:textSize="13sp"
                             android:textColor="#88FF9800" />
                     </LinearLayout>
@@ -213,7 +213,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Acts as a privileged node in the mesh network and, thanks to an internet connection, can automatically forward SOS messages to Civil Protection, extending coverage beyond the physical limits of the mesh."
+                    android:text="Acts as a privileged node in the mesh network and, thanks to an internet connection, can automatically forward SOS messages to "Protezione Civile", extending coverage beyond the physical limits of the mesh."
                     android:textSize="14sp"
                     android:textColor="#CCFFFFFF"
                     android:lineSpacingMultiplier="1.4" />
@@ -235,7 +235,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="✓  SOS relay → Civil Protection via internet"
+                        android:text="✓  SOS relay → "Protezione Civile" via internet"
                         android:textSize="13sp"
                         android:textColor="#AAFF9800"
                         android:paddingBottom="4dp" />
