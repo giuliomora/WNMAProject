@@ -67,7 +67,7 @@ class MessageDetailActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.tv_detail_title).text = when {
             isSos       -> "🆘 SOS"
             isBroadcast -> "📡 Broadcast"
-            else        -> "📩 Messaggio INFO"
+            else        -> "📩 Info message"
         }
 
         // Badge tipo/priorità
