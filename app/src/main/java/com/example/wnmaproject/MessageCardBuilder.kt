@@ -12,7 +12,7 @@ import android.widget.TextView
 private const val INITIAL_TTL = 7
 
 fun buildMessageCard(context: Context, msg: ChatMessage): View {
-    val isOwn  = msg.label == "Tu"
+    val isOwn  = msg.label == "You"
 
     // Click apre il dettaglio
     fun openDetail() {

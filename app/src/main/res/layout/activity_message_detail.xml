@@ -190,6 +190,7 @@
 
     <!-- Fixed buttons at the bottom -->
     <LinearLayout
+        android:id="@+id/layout_bottom_buttons"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"

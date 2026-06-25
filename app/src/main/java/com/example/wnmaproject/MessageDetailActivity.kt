@@ -13,6 +13,8 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.trekmesh.db.TrekMeshDatabase
 import kotlinx.coroutines.launch
@@ -57,6 +59,14 @@ class MessageDetailActivity : AppCompatActivity() {
         val alt       = intent.getDoubleExtra(EXTRA_ALT, 0.0)
         val isOwn     = intent.getBooleanExtra(EXTRA_IS_OWN, false)
         val msgId     = intent.getStringExtra(EXTRA_ID) ?: ""
+
+        // Apply bottom inset so buttons stay above the system navigation bar
+        val btnBar = findViewById<LinearLayout>(R.id.layout_bottom_buttons)
+        ViewCompat.setOnApplyWindowInsetsListener(btnBar) { v, insets ->
+            val navBar = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
+            v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, navBar.bottom + resources.getDimensionPixelSize(com.google.android.material.R.dimen.m3_btn_height) / 2)
+            insets
+        }
 
         val isSos       = type == "SOS"
         val isBroadcast = type == "BROADCAST"

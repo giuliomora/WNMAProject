@@ -97,7 +97,7 @@ object TrekMeshBus {
         ttl: Int = 0,
         timestamp: Long = System.currentTimeMillis()
     ) {
-        val label = if (isOwn) "Tu" else sender
+        val label = if (isOwn) "You" else sender
         val status = if (isOwn) "PENDING" else "RECEIVED"
         _messages.update { it + ChatMessage(id, label, type, priority, text, description, imagePath, lat, lon, alt, status, ttl, timestamp) }
         if (!isOwn) incrementUnread()
