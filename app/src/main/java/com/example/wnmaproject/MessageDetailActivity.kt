@@ -64,7 +64,8 @@ class MessageDetailActivity : AppCompatActivity() {
         val btnBar = findViewById<LinearLayout>(R.id.layout_bottom_buttons)
         ViewCompat.setOnApplyWindowInsetsListener(btnBar) { v, insets ->
             val navBar = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
-            v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, navBar.bottom + resources.getDimensionPixelSize(com.google.android.material.R.dimen.m3_btn_height) / 2)
+            val extraPadding = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_DIP, 24f, resources.displayMetrics).toInt()
+            v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, navBar.bottom + extraPadding)
             insets
         }
 
