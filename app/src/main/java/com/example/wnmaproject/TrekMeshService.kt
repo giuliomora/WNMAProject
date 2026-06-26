@@ -1,6 +1,7 @@
 package com.example.trekmesh
 
 import android.annotation.SuppressLint
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -14,6 +15,7 @@ import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
+import android.content.Context
 import android.content.Intent
 import android.location.Location
 import android.net.ConnectivityManager
@@ -25,6 +27,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.os.ParcelUuid
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.trekmesh.db.MessageEntity
@@ -90,6 +93,8 @@ class TrekMeshService : Service() {
         
         private const val BREADCRUMB_INTERVAL_MS = 15 * 60 * 1000L // 15 minuti
         private const val WEATHER_RELAY_INTERVAL_MS = 60 * 60 * 1000L // 1 ora
+
+        const val ACTION_AUTO_SOS = "com.example.trekmesh.ACTION_AUTO_SOS"
 
         private val BEACON_SERVICE_UUID = UUID.fromString("0000180D-0000-1000-8000-00805f9b34fb") // TrekMesh Heartbeat
     }
@@ -160,7 +165,6 @@ class TrekMeshService : Service() {
             db.breadcrumbDao().insert(com.example.trekmesh.db.BreadcrumbEntity(
                 lat = l.latitude, lon = l.longitude, alt = l.altitude
             ))
-            // Pulizia: mantieni solo le briciole delle ultime 24 ore
             db.breadcrumbDao().pruneOld(System.currentTimeMillis() - 24 * 60 * 60 * 1000L)
         }
     }
@@ -301,7 +305,7 @@ class TrekMeshService : Service() {
 
         override fun onEndpointLost(endpointId: String) {
             // onEndpointLost riguarda il discovery, non la connessione:
-            // se il peer è già connesso, la connessione rimane attiva — ignoriamo
+            // se il peer è già connesso, la connessione rimane attiva
             if (endpointId in connectedEndpoints) return
             val name = endpointNames.remove(endpointId)
             pendingEndpoints.remove(endpointId)
@@ -658,6 +662,7 @@ class TrekMeshService : Service() {
         serviceScope.launch {
             TrekMeshBus.safetyActions.collect { action ->
                 when (action) {
+                    SafetyTimerAction.START_3M  -> startSafetyTimer(3 * 60)
                     SafetyTimerAction.START_30M -> startSafetyTimer(30 * 60)
                     SafetyTimerAction.START_1H  -> startSafetyTimer(60 * 60)
                     SafetyTimerAction.START_2H  -> startSafetyTimer(120 * 60)
@@ -668,32 +673,86 @@ class TrekMeshService : Service() {
     }
 
     private fun startSafetyTimer(seconds: Int) {
+        val endTime = System.currentTimeMillis() + seconds * 1000L
+        scheduleSafetyAlarm(endTime)
+
         safetyTimerJob?.cancel()
         safetyTimerJob = serviceScope.launch {
-            var remaining = seconds
-            while (remaining > 0) {
+            while (isActive) {
+                val now = System.currentTimeMillis()
+                val remaining = ((endTime - now) / 1000).toInt()
+                if (remaining <= 0) break
+
                 TrekMeshBus.updateSafetyTimer(remaining)
                 delay(1000)
-                remaining--
             }
             TrekMeshBus.updateSafetyTimer(0)
-            triggerSafetyAlarm()
+            // If the service is still running when the in-process timer reaches 0,
+            // trigger the safety alarm immediately instead of waiting for the
+            // AlarmManager broadcast. This reduces delays on devices where exact
+            // alarms may be deferred.
+            try {
+                TrekMeshBus.emitLog("Safety timer expired (in-service) — triggering SOS immediately")
+                // Cancel scheduled alarm (if any) to avoid duplicate triggers
+                cancelSafetyAlarm()
+                triggerSafetyAlarm()
+            } catch (e: Exception) {
+                Log.w(LOG_TAG, "Error while triggering in-service safety alarm: ${e.message}")
+            }
         }
         TrekMeshBus.emitLog("Safety timer started: ${seconds / 60} minutes")
     }
 
     private fun stopSafetyTimer() {
+        cancelSafetyAlarm()
         safetyTimerJob?.cancel()
         TrekMeshBus.updateSafetyTimer(0)
         TrekMeshBus.emitLog("Safety timer stopped ✓")
     }
 
+    private fun scheduleSafetyAlarm(endTimeMillis: Long) {
+        val am = getSystemService(AlarmManager::class.java) ?: return
+        val intent = Intent(this, SafetyTimerReceiver::class.java).apply {
+            action = SafetyTimerReceiver.ACTION_SAFETY_TIMER_EXPIRED
+        }
+        val pi = PendingIntent.getBroadcast(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && am.canScheduleExactAlarms()) {
+            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, endTimeMillis, pi)
+        } else {
+            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, endTimeMillis, pi)
+        }
+    }
+
+    private fun cancelSafetyAlarm() {
+        val am = getSystemService(AlarmManager::class.java) ?: return
+        val intent = Intent(this, SafetyTimerReceiver::class.java).apply {
+            action = SafetyTimerReceiver.ACTION_SAFETY_TIMER_EXPIRED
+        }
+        val pi = PendingIntent.getBroadcast(this, 0, intent, PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE)
+        if (pi != null) {
+            am.cancel(pi)
+            pi.cancel()
+        }
+    }
+
     private fun triggerSafetyAlarm() {
+        // Ensure any scheduled alarm is cancelled to avoid duplicate triggers
+        cancelSafetyAlarm()
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        val wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TrekMesh:AutoSosWakeLock")
+        wakeLock.acquire(10000L) // Tieni sveglio per 10 secondi per trasmettere
+
         TrekMeshBus.emitLog("⚠️ ALERT: Missed check-in! Sending automatic SOS...")
+        
+        // Forza scansione ad alta potenza per aumentare le chance di invio
+        forceHighPowerScan()
+        updateBeaconStatus(true)
+
         TrekMeshBus.sendMessage(OutgoingMessage(
             type = "SOS",
             priority = 3,
-            text = "SOS AUTOMATICO: Mancato check-in programmato"
+            text = "AUTOMATIC SOS: Missed check-in"
         ))
     }
 
@@ -828,6 +887,11 @@ class TrekMeshService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         createNotificationChannel()
         updateForegroundNotification()
+
+        if (intent?.action == ACTION_AUTO_SOS) {
+            triggerSafetyAlarm()
+        }
+
         if (MeshServicePrefs.isEnabled(this)) {
             startAdaptiveScanning()
         } else {
@@ -900,6 +964,25 @@ class TrekMeshService : Service() {
                 if (msg.type == "SOS" && msg.priority >= 3) {
                     forceHighPowerScan()
                     updateBeaconStatus(true)
+                    // Show a local notification immediately for the SOS so the user
+                    // sees it even if the app is backgrounded / screen is off.
+                    try {
+                        showMessageNotification(
+                            msgId = msg.id,
+                            sender = localEndpointName,
+                            type = msg.type,
+                            priority = msg.priority,
+                            text = msg.text,
+                            description = msg.description,
+                            ttl = ttl,
+                            timestamp = System.currentTimeMillis(),
+                            lat = lat,
+                            lon = lon,
+                            alt = alt
+                        )
+                    } catch (e: Exception) {
+                        Log.w(LOG_TAG, "Unable to show SOS notification: ${e.message}")
+                    }
                     if (UserRolePrefs.getRole(this@TrekMeshService) == UserRole.RIFUGIO) {
                         serviceScope.launch {
                             val relayed = ProtezioneCivileRelay.sendAlert(
@@ -940,9 +1023,6 @@ class TrekMeshService : Service() {
             connectionsClient.sendPayload(endpointId, bytesPayload)
             filePayload?.let { connectionsClient.sendPayload(endpointId, it) }
         }
-        
-        // Se è un messaggio a bassa priorità (BROADCAST) e abbiamo molti endpoint, 
-        // potremmo batchare, ma per ora la priorità è gestita dal DAO nel flush.
     }
 
     private fun forwardToAllExcept(msg: MeshMessage, excludeEndpointId: String) {

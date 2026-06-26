@@ -8,7 +8,6 @@ import javax.crypto.spec.SecretKeySpec
 
 object CryptoHelper {
     // Chiave pre-condivisa: tutti i dispositivi con l'app usano la stessa chiave.
-    // In una versione futura sostituire con scambio chiavi Diffie-Hellman.
     private val KEY_BYTES = "TrekMesh-AES256-SharedKey-v1.0!!".toByteArray(Charsets.UTF_8) // 32 byte = 256 bit
     private val secretKey = SecretKeySpec(KEY_BYTES, "AES")
 

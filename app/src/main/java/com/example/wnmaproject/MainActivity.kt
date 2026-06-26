@@ -45,7 +45,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val isDebug = applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+        val isDebug = (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
         val viewPager = findViewById<ViewPager2>(R.id.view_pager)
         val tabLayout = findViewById<TabLayout>(R.id.tab_layout)
@@ -185,13 +185,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showSafetyTimerDialog() {
-        val options = arrayOf("30 minutes", "1 hour", "2 hours")
+        val options = arrayOf("3 minutes", "30 minutes", "1 hour", "2 hours")
         AlertDialog.Builder(this)
             .setTitle("Set Safety Timer")
             .setItems(options) { _, which ->
                 val action = when (which) {
-                    0 -> SafetyTimerAction.START_30M
-                    1 -> SafetyTimerAction.START_1H
+                    0 -> SafetyTimerAction.START_3M
+                    1 -> SafetyTimerAction.START_30M
+                    2 -> SafetyTimerAction.START_1H
                     else -> SafetyTimerAction.START_2H
                 }
                 TrekMeshBus.triggerSafetyAction(action)
@@ -207,7 +208,7 @@ class MainActivity : AppCompatActivity() {
                 "You are about to send:\n\n" +
                 "\"A hiker is asking for help\"\n\n" +
                 "Priority: HIGH (SOS 3)\n\n" +
-                "This message cannot be modified or cancelled. Confirm?"
+                "This message cannot be modified or cancelled. Confirm?",
             )
             .setPositiveButton("Send SOS") { _, _ ->
                 TrekMeshBus.sendMessage(

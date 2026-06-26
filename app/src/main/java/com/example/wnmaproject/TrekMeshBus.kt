@@ -34,7 +34,7 @@ data class ChatMessage(
     val timestamp: Long = System.currentTimeMillis()
 )
 
-enum class SafetyTimerAction { START_30M, START_1H, START_2H, STOP }
+enum class SafetyTimerAction { START_3M, START_30M, START_1H, START_2H, STOP }
 
 object TrekMeshBus {
     private val _logs = MutableStateFlow<List<String>>(emptyList())
